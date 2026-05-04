@@ -1418,14 +1418,14 @@ class MainGameScene extends Phaser.Scene {
 const config = { 
     type: Phaser.AUTO, 
     scale: {
-        mode: Phaser.Scale.FIT, // 自動等比例縮放以適應螢幕
-        autoCenter: Phaser.Scale.CENTER_BOTH, // 畫面永遠在螢幕正中央
+        mode: Phaser.Scale.FIT, // 自動等比例縮放
+        parent: 'game-container', // 綁定 HTML 容器
+        autoCenter: Phaser.Scale.CENTER_BOTH, // 自動置中
         width: canvasWidth,   
         height: canvasHeight  
     },
-    parent: 'game-container', 
     backgroundColor: '#0a0a1a', 
-    input: { activePointers: 3 },
+    input: { activePointers: 3 }, // 保持多點觸控支援
     physics: { 
         default: 'arcade', 
         arcade: { gravity: { y: 0 } } 

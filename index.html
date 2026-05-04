@@ -2,24 +2,28 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>未來特工：星核突圍 - 原型</title>
+    <!-- 關鍵修復：鎖死手機瀏覽器的縮放功能，禁止使用者雙指放大，並支援瀏海屏 (viewport-fit=cover) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>未來特工：星核突圍</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background-color: #1a1a1a;
+            background-color: #0a0a1a;
+            overflow: hidden; /* 隱藏瀏覽器捲軸 */
+            touch-action: none; /* 關鍵修復：禁止手機瀏覽器的下拉重新整理或滑動手勢 */
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh; /* 強制容器永遠符合螢幕大小 */
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        #game-container {
-            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
-            border: 2px solid #333;
-            border-radius: 8px;
+        /* 確保畫布不會超出容器 */
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
