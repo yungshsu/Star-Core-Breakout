@@ -627,8 +627,8 @@ class MainGameScene extends Phaser.Scene {
 
     setupUI() {
         this.add.rectangle(500, 40, 1000, 80, 0x000000, 0.5).setScrollFactor(0).setDepth(5000);
-        this.statsHud = this.add.text(20, 20, '', { fontSize: '14px', color: '#00ffff', fontStyle: 'bold', lineSpacing: 4 }).setScrollFactor(0).setDepth(5001);
-        this.timerText = this.add.text(650, 50, '00:00', { fontSize: '32px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(5001);
+        this.statsHud = this.add.text(20, 20, '', { fontSize: '14px', color: '#00ffff', fontStyle: 'bold', lineSpacing: 2 }).setScrollFactor(0).setDepth(5001);
+        this.timerText = this.add.text(650, 40, '00:00', { fontSize: '32px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(5001);
         this.coinHud = this.add.text(980, 40, '', { fontSize: '22px', color: '#ffff00', fontStyle: 'bold' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(5001);
         this.add.rectangle(25, 100, 250, 25, 0x000000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5001).setStrokeStyle(2, 0xffffff, 1);
         this.hpBarFront = this.add.rectangle(25, 100, 250, 25, 0xff0000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5002);
@@ -645,7 +645,11 @@ class MainGameScene extends Phaser.Scene {
         this.quitTxt = this.add.text(500, 500, '返回主選單', { fontSize: '28px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(9502).setVisible(false);
         this.quitBtn.on('pointerdown', () => {
             this.sound.stopAll();
-            const data = loadGameData(); data.coins += this.totalCoins; saveCoins(data.coins);
+            if (!this.isTestMode) {
+                const data = loadGameData(); 
+                data.coins += this.totalCoins; 
+                saveCoins(data.coins);
+            }
             this.scene.start('MainMenuScene');
         });
 
@@ -811,7 +815,8 @@ class MainGameScene extends Phaser.Scene {
                 }
             }
 
-            if (this.survivalSeconds % BOSS_SPAWN_INTERVAL === 0 && !this.bossActive && this.survivalSeconds > 0) this.spawnBoss();
+            let interval = this.isTestMode ? 10 : BOSS_SPAWN_INTERVAL;
+            if (this.survivalSeconds % interval === 0 && !this.bossActive && this.survivalSeconds > 0) this.spawnBoss();
         }
     }
 
@@ -969,6 +974,17 @@ class MainGameScene extends Phaser.Scene {
 
     executeBossSkills(time, delta) {
         if (!this.boss || !this.boss.active) return;
+
+        // === Boss 基礎彈幕 (不佔用技能位，每 3 秒一次) ===
+        if (!this.bossSkillTimers['base']) this.bossSkillTimers['base'] = 0;
+        if (time - this.bossSkillTimers['base'] > 3000) {
+            this.bossSkillTimers['base'] = time;
+            for(let i = -1; i <= 1; i++) {
+                let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'novaBullet').setTint(0xff0000);
+                let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y) + (i * 0.2);
+                b.setVelocity(Math.cos(ang) * 250, Math.sin(ang) * 250);
+            }
+        }
 
         this.bossSkills.forEach(skill => {
             if (!this.bossSkillTimers[skill]) this.bossSkillTimers[skill] = 0;
@@ -1145,20 +1161,37 @@ class MainGameScene extends Phaser.Scene {
             this.alienGroup.clear(true, true);
             this.ghostGroup.clear(true, true);
 
+            // 計算安全的出生點，避免直接壓在玩家身上
+            let spawnX = Phaser.Math.Clamp(this.player.x, 300, WORLD_SIZE - 300);
+            let spawnY = this.player.y > WORLD_SIZE / 2 ? this.player.y - 450 : this.player.y + 450;
+            spawnY = Phaser.Math.Clamp(spawnY, 300, WORLD_SIZE - 300);
+
             // 將 Boss 加入 alienGroup，使其能正確觸發碰撞回呼與 AI 邏輯
-            this.boss = this.alienGroup.create(WORLD_SIZE / 2, WORLD_SIZE / 2 - 400, 'boss');
+            this.boss = this.alienGroup.create(spawnX, spawnY, 'boss');
             this.boss.setScale(2.5).setDepth(2000).setCollideWorldBounds(true);
-            this.boss.setImmovable(false); // 允許被碰撞反作用力輕微推動
-            this.boss.setDrag(150); // 加入物理阻尼，增加移動重量感
+            this.boss.setImmovable(false);
+            this.boss.setDrag(150);
             
+            // 出場特效：擊退玩家
+            this.cameras.main.shake(500, 0.02);
+            let angle = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
+            this.player.body.velocity.set(Math.cos(angle) * 1000, Math.sin(angle) * 1000);
+
             this.boss.hp = 500 + this.bossCount * 250; 
             this.maxBossHP = this.boss.hp;
             this.bossHP = this.boss.hp; 
             this.boss.phaseMarks = [0.8, 0.5, 0.2];
-            this.boss.isBoss = true; // 標記為 Boss
+            this.boss.isBoss = true; 
             this.bossHud.setVisible(true);
+            this.bossCount++; 
 
-            if (!this.bestiary.monsters.includes('boss')) { this.bestiary.monsters.push('boss'); saveBestiary(this.bestiary); }
+            // 初始解鎖 1 個隨機基礎技能
+            this.bossSkills = [Phaser.Utils.Array.GetRandom(['死亡彈幕', '野蠻衝撞', '追蹤機雷'])];
+
+            if (!this.isTestMode && !this.bestiary.monsters.includes('boss')) { 
+                this.bestiary.monsters.push('boss'); 
+                saveBestiary(this.bestiary); 
+            }
         });
     }
 
@@ -1561,8 +1594,10 @@ class MainGameScene extends Phaser.Scene {
         const type = Phaser.Utils.Array.GetRandom(types);
 
         const newGear = { id: Date.now().toString(), type, rarity, level: itemLevel, stats, name: info.n + typeNames[type] };
-        data.inventory.push(newGear);
-        saveGears(data.inventory, data.equipped);
+        if (!this.isTestMode) {
+            data.inventory.push(newGear);
+            saveGears(data.inventory, data.equipped);
+        }
 
         const txt = this.add.text(this.player.x, this.player.y - 40, `獲得[${info.n}]裝備!`, { fontSize: '22px', color: info.clr, fontStyle: 'bold', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
         this.tweens.add({ targets: txt, y: txt.y - 100, alpha: 0, duration: 1500, onComplete: () => txt.destroy() });
@@ -1579,7 +1614,11 @@ class MainGameScene extends Phaser.Scene {
         this.bossWarningTxt.setVisible(false);
         this.tweens.killTweensOf(this.bossWarningTxt);
 
-        const data = loadGameData(); data.coins += this.totalCoins; saveCoins(data.coins);
+        if (!this.isTestMode) {
+            const data = loadGameData(); 
+            data.coins += this.totalCoins; 
+            saveCoins(data.coins);
+        }
         this.gameOverPanel.setVisible(true); this.finalCoinsText.setText(`本次任務共獲取： ${this.totalCoins} 枚星幣`);
     }
 
@@ -1632,7 +1671,10 @@ class MainGameScene extends Phaser.Scene {
         if (type === 'armored') a.setScale(2.0);
         a.setCollideWorldBounds(true);
 
-        if (!this.bestiary.monsters.includes(type)) { this.bestiary.monsters.push(type); saveBestiary(this.bestiary); }
+        if (!this.isTestMode && !this.bestiary.monsters.includes(type)) { 
+            this.bestiary.monsters.push(type); 
+            saveBestiary(this.bestiary); 
+        }
 
         a.hp = 1 + Math.floor(this.survivalSeconds / 60) * (type === 'armored' ? 4 : 1); a.maxHP = a.hp;
         if (Math.random() < 0.1) {
