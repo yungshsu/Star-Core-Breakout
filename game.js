@@ -41,7 +41,14 @@ class BootScene extends Phaser.Scene {
         this.add.text(500, 400, '系統載入中...', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
 
         this.load.image('space_bg', 'https://labs.phaser.io/assets/skies/deep-space.jpg');
-        this.load.image('agent_ship', 'https://labs.phaser.io/assets/sprites/shmup-ship.png');
+        // 載入多方向機甲貼圖
+        const chars = ['alpha', 'phantom', 'titan'];
+        chars.forEach(c => {
+            this.load.image(`mech_${c}_up`, `./assets/mech_${c}_up.png`);
+            this.load.image(`mech_${c}_down`, `./assets/mech_${c}_down.png`);
+            this.load.image(`mech_${c}_side`, `./assets/mech_${c}_side.png`);
+        });
+
         this.load.image('alien_ship', 'https://labs.phaser.io/assets/sprites/space-baddie.png');
         this.load.image('striker_ship', 'https://labs.phaser.io/assets/sprites/shmup-baddie2.png');
         this.load.image('ghost_ship', 'https://labs.phaser.io/assets/sprites/shmup-baddie3.png');
@@ -167,11 +174,11 @@ class MainMenuScene extends Phaser.Scene {
         const charBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.9).setInteractive();
         this.charPanel.add([charBg, this.add.rectangle(500, 400, 850, 550, 0x111122).setStrokeStyle(4, 0x00ffff)]);
         this.charPanel.add(this.add.text(500, 180, '選擇你的特工', { fontSize: '42px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5));
-
+        // 特工解鎖
         const charData = [
             { id: 'alpha', name: 'Alpha (核心特工)', color: 0x00aaff, price: 0, desc: '均衡型機體\n標準配置' },
-            { id: 'phantom', name: 'Phantom (幻影)', color: 0xff00ff, price: 50, desc: '移速 +25%\nHP -20 | 自帶 EMP' },
-            { id: 'titan', name: 'Titan (泰坦)', color: 0xffaa00, price: 100, desc: '移速 -15%\nHP +50 | 自帶護盾 & 威力+1' }
+            { id: 'phantom', name: 'Phantom (幻影)', color: 0xff00ff, price: 20, desc: '移速 +25%\nHP -20 | 自帶 EMP' },
+            { id: 'titan', name: 'Titan (泰坦)', color: 0xffaa00, price: 20, desc: '移速 -15%\nHP +50 | 自帶護盾 & 威力+1' }
         ];
 
         this.charButtons = [];
@@ -179,13 +186,26 @@ class MainMenuScene extends Phaser.Scene {
             const x = 220 + i * 280;
             const slot = this.add.container(x, 400);
             slot.add(this.add.rectangle(0, 0, 240, 320, 0x1a1a2e).setStrokeStyle(2, char.color));
-            slot.add(this.add.sprite(0, -80, 'agent_ship').setScale(1.5).setTint(char.color));
+            slot.add(this.add.sprite(0, -80, `mech_${char.id}_down`).setScale(0.9).setTint(char.color));
 
-            slot.add(this.add.text(0, -20, char.name, { fontSize: '22px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
-            slot.add(this.add.text(0, 40, char.desc, { fontSize: '16px', color: '#ccc', align: 'center' }).setOrigin(0.5));
+            // 將名稱放回上方 (Y=0)
+            slot.add(this.add.text(0, 0, char.name, {
+                fontSize: '22px', color: '#fff', fontStyle: 'bold',
+                padding: { top: 10, bottom: 5 }
+            }).setOrigin(0.5));
 
-            const btn = this.add.rectangle(0, 110, 160, 45, 0x333333).setInteractive({ useHandCursor: true }).setStrokeStyle(2, char.color);
-            const btnTxt = this.add.text(0, 110, '', { fontSize: '18px', color: '#fff' }).setOrigin(0.5);
+            // 說明文字移至紅框位置 (Y=45)
+            slot.add(this.add.text(0, 45, char.desc, {
+                fontSize: '16px', color: '#ccc', align: 'center',
+                padding: { top: 5, bottom: 5 }
+            }).setOrigin(0.5));
+
+            const btn = this.add.rectangle(0, 115, 160, 45, 0x333333).setInteractive({ useHandCursor: true }).setStrokeStyle(2, char.color);
+            // 修復按鈕文字裁切並確保置中
+            const btnTxt = this.add.text(0, 115, '', {
+                fontSize: '18px', color: '#fff',
+                padding: { top: 10, bottom: 5 }
+            }).setOrigin(0.5);
             slot.add([btn, btnTxt]);
 
             this.charButtons.push({ btn, btnTxt, char });
@@ -459,8 +479,18 @@ class MainGameScene extends Phaser.Scene {
 
         this.starBackground = this.add.tileSprite(WORLD_SIZE / 2, WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE, 'space_bg').setDepth(0);
 
-        this.player = this.physics.add.sprite(WORLD_SIZE / 2, WORLD_SIZE / 2, 'agent_ship').setScale(1.8).setCollideWorldBounds(true).setDrag(2500).setMaxVelocity(260 * this.speedMod).setDepth(10);
-        this.player.setCircle(12, 4, 4);
+        this.player = this.physics.add.sprite(WORLD_SIZE / 2, WORLD_SIZE / 2, `mech_${this.charId}_down`).setScale(0.75).setCollideWorldBounds(true).setDrag(2500).setMaxVelocity(260 * this.speedMod).setDepth(10);
+
+        // 設定精確的矩形碰撞框 (根據機甲身形調整)
+        let hitBoxWidth = 40;
+        let hitBoxHeight = 60;
+        this.player.body.setSize(hitBoxWidth, hitBoxHeight);
+
+        // 將碰撞框置中對齊圖片
+        let offsetX = (this.player.width - hitBoxWidth) / 2;
+        let offsetY = (this.player.height - hitBoxHeight) / 2;
+        this.player.body.setOffset(offsetX, offsetY);
+
         this.player.isInvulnerable = false;
 
         if (this.charId === 'phantom') this.player.setTint(0xff88ff);
@@ -778,7 +808,21 @@ class MainGameScene extends Phaser.Scene {
             moveY /= length;
             this.player.setAccelerationX(moveX * acc * speedMod);
             this.player.setAccelerationY(moveY * acc * speedMod);
-            this.player.setRotation(Math.atan2(moveY, moveX) + Math.PI / 2);
+
+            // 根據位移方向切換貼圖
+            if (Math.abs(moveX) > Math.abs(moveY)) {
+                // 水平移動為主：切換至側面貼圖
+                this.player.setTexture(`mech_${this.charId}_side`);
+                this.player.setFlipX(moveX < 0); // 向左移動時鏡像翻轉
+            } else {
+                // 垂直移動為主
+                if (moveY < 0) {
+                    this.player.setTexture(`mech_${this.charId}_up`); // 向上走：背影
+                } else {
+                    this.player.setTexture(`mech_${this.charId}_down`); // 向下走：正面
+                }
+                this.player.setFlipX(false); // 上下移動不翻轉
+            }
         } else {
             this.player.setAccelerationX(0);
             this.player.setAccelerationY(0);
@@ -1716,7 +1760,10 @@ const config = {
     input: { activePointers: 3 },
     physics: {
         default: 'arcade',
-        arcade: { gravity: { y: 0 } }
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
     },
     // 關鍵修復：加入 BootScene 作為第一啟動順位
     scene: [BootScene, MainMenuScene, MainGameScene]
