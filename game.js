@@ -107,6 +107,12 @@ class MainMenuScene extends Phaser.Scene {
         this.createInvisibleBtn(810, 700, 280, 60, () => this.scene.start('MainGameScene', { isTestMode: true, char: 'alpha' })); // 開發者測試
 
         // === 以下為各面板邏輯 (保持原樣，僅調整圖層深度確保在背景之上) ===
+        // 4. 加入版本號與製作人簽名 (右下角)
+        this.add.text(980, 780, 'v1.9 | Producer: Yungs.hsu', {
+            fontSize: '16px',
+            color: '#8888aa', // 用稍微偏暗的金屬灰，避免搶走主選單的視覺焦點
+            fontStyle: 'bold'
+        }).setOrigin(1, 1); // Origin(1,1) 代表以文字的「右下角」為對齊基準點
 
         this.gearPanel = this.add.container(0, 0).setVisible(false).setDepth(4000);
         const gearBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.95).setInteractive();
