@@ -1415,14 +1415,21 @@ class MainGameScene extends Phaser.Scene {
     togglePause() { this.isPaused = !this.isPaused; const v = this.isPaused; this.isPaused ? this.physics.pause() : this.physics.resume(); this.pauseOverlay.setVisible(v); this.quitBtn.setVisible(v); this.quitTxt.setVisible(v); }
 }
 
-const config = {
-    type: Phaser.AUTO,
-    width: canvasWidth,
-    height: canvasHeight,
-    parent: 'game-container',
-    backgroundColor: '#0a0a1a',
+const config = { 
+    type: Phaser.AUTO, 
+    scale: {
+        mode: Phaser.Scale.FIT, // 自動等比例縮放以適應螢幕
+        autoCenter: Phaser.Scale.CENTER_BOTH, // 畫面永遠在螢幕正中央
+        width: canvasWidth,   
+        height: canvasHeight  
+    },
+    parent: 'game-container', 
+    backgroundColor: '#0a0a1a', 
     input: { activePointers: 3 },
-    physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
-    scene: [MainMenuScene, MainGameScene]
+    physics: { 
+        default: 'arcade', 
+        arcade: { gravity: { y: 0 } } 
+    }, 
+    scene: [MainMenuScene, MainGameScene] 
 };
 const game = new Phaser.Game(config);
