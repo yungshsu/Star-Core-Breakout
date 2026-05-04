@@ -87,10 +87,10 @@ class MainMenuScene extends Phaser.Scene {
         const data = loadGameData();
         this.add.rectangle(500, 400, 1000, 800, 0x0a0a1a);
 
-        this.add.text(500, 180, '星核突圍', { fontSize: '100px', color: '#00ffff', fontStyle: 'bold', stroke: '#0055ff', strokeThickness: 15 }).setOrigin(0.5);
-        this.add.text(500, 260, 'STAR-CORE BREAKOUT', { fontSize: '24px', color: '#ffffff', letterSpacing: 8 }).setOrigin(0.5);
+        this.add.text(500, 180, '星核突圍', { fontSize: '100px', color: '#00ffff', fontStyle: 'bold', stroke: '#0055ff', strokeThickness: 15, padding: { top: 20, bottom: 20 } }).setOrigin(0.5);
+        this.add.text(500, 260, 'STAR-CORE BREAKOUT', { fontSize: '24px', color: '#ffffff', letterSpacing: 8, padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
         this.add.rectangle(900, 40, 160, 40, 0x111122, 0.8).setStrokeStyle(2, 0xffff00);
-        this.coinText = this.add.text(900, 40, `💰 星幣: ${data.coins}`, { fontSize: '20px', color: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+        this.coinText = this.add.text(900, 40, `💰 星幣: ${data.coins}`, { fontSize: '20px', color: '#ffff00', fontStyle: 'bold', padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
 
         this.createBtn(380, '開始任務', 0x00aaff, () => this.toggleCharPanel(true));
         this.createBtn(460, '軍械庫強化', 0xffaa00, () => this.toggleShop(true));
@@ -218,7 +218,7 @@ class MainMenuScene extends Phaser.Scene {
 
     createBtn(y, txt, clr, cb) {
         const b = this.add.rectangle(500, y, 420, 70, clr, 0.8).setInteractive({ useHandCursor: true });
-        this.add.text(500, y, txt, { fontSize: '32px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(500, y, txt, { fontSize: '32px', color: '#fff', fontStyle: 'bold', padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
         b.on('pointerdown', cb);
     }
     toggleShop(v) { this.shopPanel.setVisible(v); }
@@ -359,7 +359,8 @@ class MainGameScene extends Phaser.Scene {
             attackSpeed: meta.shop.firerate + bonus,
             magnet: meta.shop.magnet + bonus,
             hp: meta.shop.hp + bonus,
-            scatter: 0, shieldMax: 0, emp: 0
+            scatter: 0, shieldMax: 0, emp: 0,
+            freeze: 0, split: 0, explode: 0 // 新增流派技能等級
         };
 
         this.speedMod = 1.0;
@@ -768,6 +769,13 @@ class MainGameScene extends Phaser.Scene {
         [this.alienGroup, this.ghostGroup].forEach(group => {
             group.getChildren().forEach(a => {
                 if (!a.active || !a.body) return;
+
+                // === 質子冰爆：定身邏輯 ===
+                if (a.isFrozen) {
+                    if (time > a.frozenTimer) { a.isFrozen = false; a.clearTint(); } 
+                    else { a.setVelocity(0, 0); return; } // 凍結時停在原地並跳過 AI 邏輯
+                }
+
                 let spd = 120;
                 if (a.texture.key === 'striker_ship') spd = 180;
 
@@ -1061,6 +1069,8 @@ class MainGameScene extends Phaser.Scene {
         this.bossHud.setVisible(false);
         this.chestGroup.create(this.boss.x, this.boss.y, 'superChest');
         this.gearGroup.create(this.boss.x, this.boss.y, 'gearBox');
+        // 補回 Boss 死亡應有的星幣掉落
+        this.itemGroup.create(this.boss.x, this.boss.y, 'coin');
         this.boss.destroy();
     }
 
@@ -1094,6 +1104,31 @@ class MainGameScene extends Phaser.Scene {
                 this.sparkEmitter.emitParticleAt(closest.x, closest.y, 6);
                 let dmg = (1 + this.skills.power) * (closest.texture.key === 'armored_ship' ? 0.5 : 1);
                 closest.lastHitTime = this.time.now;
+
+                // === 質子冰爆特效 (加入 Boss 霸體抗性) ===
+                let freezeChance = this.skills.freeze * 0.1;
+                let isBoss = (this.bossActive && closest === this.boss);
+                if (isBoss) freezeChance *= 0.2; // Boss 被冰凍的機率大幅降低至原本的 20%
+
+                if (this.skills.freeze > 0 && Math.random() < freezeChance) {
+                    closest.setTintFill(0x00ffff);
+                    closest.isFrozen = true;
+                    // 凍結時間：一般怪 2 秒，Boss 只有 0.5 秒
+                    closest.frozenTimer = this.time.now + (isBoss ? 500 : 2000); 
+                }
+
+                // === 分裂彈頭特效 ===
+                if (this.skills.split > 0) {
+                    let nearby = targets.filter(t => t.active && t !== closest && Phaser.Math.Distance.Between(closest.x, closest.y, t.x, t.y) < 250);
+                    Phaser.Utils.Array.Shuffle(nearby).slice(0, this.skills.split).forEach(t => {
+                        this.activeLasers.push({ x1: closest.x, y1: closest.y, x2: t.x, y2: t.y, alpha: 0.6 });
+                        this.sparkEmitter.emitParticleAt(t.x, t.y, 4);
+                        let splitDmg = dmg * 0.5; // 分裂傷害減半
+                        if (this.bossActive && t === this.boss) { if (!this.boss.isInvincible) this.bossHP -= splitDmg; }
+                        else { if (t.hasShield) { t.hasShield = false; } else { t.hp -= splitDmg; if (t.hp <= 0) this.onAlienKilled(t); } }
+                    });
+                }
+
                 if (this.bossActive && closest === this.boss) { if (!this.boss.isInvincible) this.bossHP -= dmg; this.checkBossPhase(); if (this.bossHP <= 0) this.killBoss(); }
                 else { if (closest.hasShield) { closest.hasShield = false; return; } closest.hp -= dmg; if (closest.hp <= 0) this.onAlienKilled(closest); }
             };
@@ -1107,6 +1142,26 @@ class MainGameScene extends Phaser.Scene {
 
     onAlienKilled(a) {
         if (!a.active) return;
+
+        // === 反物質爆破：死亡爆炸 ===
+        if (this.skills.explode > 0 && !a.isExploding) {
+            a.isExploding = true; // 防止無限連環爆的無窮迴圈
+            let radius = 80 + this.skills.explode * 20;
+            let exDmg = this.skills.explode * 5;
+
+            // 繪製爆炸特效圈
+            let exGfx = this.add.graphics().setDepth(15);
+            exGfx.fillStyle(0xffaa00, 0.5).fillCircle(a.x, a.y, radius);
+            this.tweens.add({ targets: exGfx, alpha: 0, duration: 300, onComplete: () => exGfx.destroy() });
+
+            // 對範圍內敵人造成傷害
+            [this.alienGroup, this.ghostGroup].forEach(g => g.getChildren().forEach(t => {
+                if (t.active && t !== a && Phaser.Math.Distance.Between(a.x, a.y, t.x, t.y) < radius) {
+                    if (this.bossActive && t === this.boss) { if (!this.boss.isInvincible) this.bossHP -= exDmg; }
+                    else { if (t.hasShield) t.hasShield = false; else { t.hp -= exDmg; if (t.hp <= 0) this.time.delayedCall(10, () => this.onAlienKilled(t)); } }
+                }
+            }));
+        }
 
         try { this.sound.play('sfx_explode', { volume: 0.2 }); } catch (e) { }
 
@@ -1127,14 +1182,53 @@ class MainGameScene extends Phaser.Scene {
     spawnSupply() { this.itemGroup.create(Phaser.Math.Between(100, 1900), Phaser.Math.Between(100, 1900), 'supplyBox'); }
     breakSupply(s) { if (Math.random() < 0.8) this.itemGroup.create(s.x, s.y, 'medkit'); else this.itemGroup.create(s.x, s.y, 'coin'); s.destroy(); }
 
-    showLevelUp() { this.isPaused = true; this.physics.pause(); this.upgradeOverlay.setVisible(true); const types = [{ k: 'power', n: '核心威力' }, { k: 'attackSpeed', n: '射控系統' }, { k: 'magnet', n: '磁力牽引' }]; this.upgradeCards.forEach((card, i) => { card.c.setVisible(true); card.t.setText(types[i].n).setVisible(true); card.type = types[i].k; card.c.removeAllListeners('pointerdown').on('pointerdown', () => this.applyUpgrade(card.type)); }); }
+    showLevelUp() { 
+        this.isPaused = true; 
+        this.physics.pause(); 
+        this.upgradeOverlay.setVisible(true); 
+
+        let pool = [];
+        if (this.skills.power < 10) pool.push({ k: 'power', n: `核心威力 Lv.${this.skills.power + 1}`, d: '提升雷射基礎傷害' });
+        if (this.skills.attackSpeed < 10) pool.push({ k: 'attackSpeed', n: `射控系統 Lv.${this.skills.attackSpeed + 1}`, d: '提升雷射發射頻率' });
+        if (this.skills.magnet < 10) pool.push({ k: 'magnet', n: `磁力牽引 Lv.${this.skills.magnet + 1}`, d: '擴大物資拾取範圍' });
+
+        // 基礎技能總和 >= 10 才會解鎖進階流派技能
+        let baseTotal = this.skills.power + this.skills.attackSpeed + this.skills.magnet;
+        if (baseTotal >= 10) {
+            // 加入 60% 的機率判定，增加稀有價值感
+            if (this.skills.freeze < 5 && Math.random() < 0.6) pool.push({ k: 'freeze', n: `質子冰爆 Lv.${this.skills.freeze + 1}`, d: '雷射有機率凍結敵人' });
+            if (this.skills.split < 3 && Math.random() < 0.6) pool.push({ k: 'split', n: `分裂彈頭 Lv.${this.skills.split + 1}`, d: '擊中後雷射會折射分裂' });
+            if (this.skills.explode < 5 && Math.random() < 0.6) pool.push({ k: 'explode', n: `反物質爆破 Lv.${this.skills.explode + 1}`, d: '敵人死亡時引發範圍爆炸' });
+        }
+
+        // 隨機選 3 個，若技能都滿了就給補血
+        let picked = Phaser.Utils.Array.Shuffle(pool).slice(0, 3);
+        while (picked.length < 3) picked.push({ k: 'heal', n: '緊急修復', d: '恢復 30% 最大生命值' });
+
+        this.upgradeCards.forEach((card, i) => { 
+            let sk = picked[i];
+            card.c.setVisible(true); 
+            card.t.setText(sk.n + '\n\n' + sk.d).setVisible(true).setFontSize('20px'); 
+            card.type = sk.k; 
+            card.c.removeAllListeners('pointerdown').on('pointerdown', () => this.applyUpgrade(card.type)); 
+        }); 
+    }
 
     applyUpgrade(type) {
         if (type === 'power') this.skills.power++;
         else if (type === 'attackSpeed') { this.skills.attackSpeed++; this.attackEvent.delay = 800 * Math.pow(0.91, this.skills.attackSpeed); }
-        else if (type === 'magnet') { this.skills.magnet++; this.magnetRange += 30; }
-        this.currentXP = 0; this.targetXP += 5; this.isPaused = false; this.physics.resume();
-        this.upgradeOverlay.setVisible(false); this.upgradeCards.forEach(c => { c.c.setVisible(false); c.t.setVisible(false); });
+        else if (type === 'magnet') { this.skills.magnet++; this.magnetRange = 150 + this.skills.magnet * 30; }
+        else if (type === 'freeze') this.skills.freeze++;
+        else if (type === 'split') this.skills.split++;
+        else if (type === 'explode') this.skills.explode++;
+        else if (type === 'heal') this.currentHP = Math.min(this.maxHP, this.currentHP + this.maxHP * 0.3);
+
+        this.currentXP = 0; 
+        this.targetXP += 5; 
+        this.upgradeOverlay.setVisible(false);
+        this.upgradeCards.forEach(obj => { obj.c.setVisible(false); obj.t.setVisible(false); });
+        this.isPaused = false;
+        this.physics.resume();
         this.updateHUD();
     }
 
