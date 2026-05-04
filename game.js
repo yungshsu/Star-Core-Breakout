@@ -1,10 +1,9 @@
 /**
- * 《星核突圍》- 製作人終極重構版 (v1.7)
+ * 《星核突圍》- 製作人終極重構版 (v1.9)
  * 修正項目：
- * 1. 新增 BootScene 確保所有資源全局預載入，修復 UI 破圖跑位。
- * 2. 重構移動物理邏輯，確保 WASD 與虛擬搖桿完美共存且不卡死。
- * 3. 修復靜態隕石放大後的物理碰撞框 (refreshBody)。
- * 4. 確保介面容器座標完美置中，徹底解決疊影問題。
+ * 1. 套用神級美術封面，徹底隱藏按鈕邊框。
+ * 2. 移除突兀的星幣遮罩與圖標，僅保留文字完美覆蓋原圖。
+ * 3. 優化主選單代碼結構。
  */
 
 const BOSS_SPAWN_INTERVAL = 180;
@@ -35,14 +34,12 @@ function saveFragments(amount) { localStorage.setItem('star_core_fragments', amo
 function loadBestiary() { return JSON.parse(localStorage.getItem('star_core_bestiary')) || { monsters: [], mutations: [] }; }
 function saveBestiary(data) { localStorage.setItem('star_core_bestiary', JSON.stringify(data)); }
 
-// === 全新開機預載入場景 (解決 UI 破圖與崩潰) ===
+
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
-        // 介面提示
         this.add.text(500, 400, '系統載入中...', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
 
-        // 圖片載入
         this.load.image('space_bg', 'https://labs.phaser.io/assets/skies/deep-space.jpg');
         this.load.image('agent_ship', 'https://labs.phaser.io/assets/sprites/shmup-ship.png');
         this.load.image('alien_ship', 'https://labs.phaser.io/assets/sprites/space-baddie.png');
@@ -60,14 +57,15 @@ class BootScene extends Phaser.Scene {
         this.load.image('item_shield', 'https://labs.phaser.io/assets/sprites/orb-blue.png');
         this.load.image('item_magnet', 'https://labs.phaser.io/assets/sprites/orb-yellow.png');
 
-        // 音效載入
+        // 載入本地美術圖
+        this.load.image('menu_bg', './assets/main_menu_bg.png');
+
         this.load.audio('bgm', 'https://labs.phaser.io/assets/audio/oedipus_tekno_sweat.ogg');
         this.load.audio('sfx_shoot', 'https://labs.phaser.io/assets/audio/SoundEffects/blaster.mp3');
         this.load.audio('sfx_explode', 'https://labs.phaser.io/assets/audio/SoundEffects/explosion.mp3');
         this.load.audio('sfx_pickup', 'https://labs.phaser.io/assets/audio/SoundEffects/p-ping.mp3');
         this.load.audio('sfx_alert', 'https://labs.phaser.io/assets/audio/SoundEffects/lazer_03.mp3');
 
-        // 幾何特效生成
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ffff).fillCircle(4, 4, 4).generateTexture('laserSpark', 8, 8);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ffff, 0.9).fillCircle(12, 12, 12).generateTexture('shieldBall', 24, 24);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xff00ff).fillCircle(5, 5, 5).fillStyle(0xffffff).fillCircle(5, 5, 2).generateTexture('novaBullet', 10, 10);
@@ -88,20 +86,28 @@ class MainMenuScene extends Phaser.Scene {
     }
     create() {
         const data = loadGameData();
-        this.add.rectangle(500, 400, 1000, 800, 0x0a0a1a);
 
-        this.add.text(500, 180, '星核突圍', { fontSize: '100px', color: '#00ffff', fontStyle: 'bold', stroke: '#0055ff', strokeThickness: 15, padding: { top: 20, bottom: 20 } }).setOrigin(0.5);
-        this.add.text(500, 260, 'STAR-CORE BREAKOUT', { fontSize: '24px', color: '#ffffff', letterSpacing: 8, padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
-        this.add.rectangle(900, 40, 160, 40, 0x111122, 0.8).setStrokeStyle(2, 0xffff00);
-        this.coinText = this.add.text(900, 40, `💰 星幣: ${data.coins}`, { fontSize: '20px', color: '#ffff00', fontStyle: 'bold', padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
+        // 1. 全螢幕專業封面圖背景
+        this.add.image(500, 400, 'menu_bg').setDisplaySize(1000, 800);
 
-        this.createBtn(380, '開始任務', 0x00aaff, () => this.toggleCharPanel(true));
-        this.createBtn(460, '軍械庫強化', 0xffaa00, () => this.toggleShop(true));
-        this.createBtn(540, '裝甲整備庫 (Gear)', 0x00ffff, () => this.toggleGearPanel(true));
-        this.createBtn(620, '星核檔案室 (圖鑑)', 0x00ffaa, () => this.toggleBestiary(true));
-        this.createBtn(700, '開發者測試 (God Mode)', 0xaa00ff, () => this.scene.start('MainGameScene', { isTestMode: true, char: 'alpha' }));
+        // 2. 星幣完美對位覆蓋：精確覆蓋原圖的數字「7」 (Y座標上調至 328)
+        this.coinText = this.add.text(915, 320, `${data.coins}`, {
+            fontSize: '24px',
+            color: '#ffffcc', // 偏白金色融入背景
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 5
+        }).setOrigin(0.5);
 
-        // === 裝備整備面板 ===
+        // 3. 隱形熱區按鈕對位 (全體 Y 座標上移 90 像素，間距設定為 90)
+        this.createInvisibleBtn(810, 398, 280, 60, () => this.toggleCharPanel(true));  // 開始任務
+        this.createInvisibleBtn(810, 475, 280, 60, () => this.toggleShop(true));       // 軍械庫強化
+        this.createInvisibleBtn(810, 550, 280, 60, () => this.toggleGearPanel(true));  // 裝甲整備庫
+        this.createInvisibleBtn(810, 625, 280, 60, () => this.toggleBestiary(true));   // 星核檔案室
+        this.createInvisibleBtn(810, 700, 280, 60, () => this.scene.start('MainGameScene', { isTestMode: true, char: 'alpha' })); // 開發者測試
+
+        // === 以下為各面板邏輯 (保持原樣，僅調整圖層深度確保在背景之上) ===
+
         this.gearPanel = this.add.container(0, 0).setVisible(false).setDepth(4000);
         const gearBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.95).setInteractive();
         this.gearPanel.add([gearBg, this.add.rectangle(500, 400, 850, 700, 0x111122).setStrokeStyle(4, 0x00ffff)]);
@@ -112,7 +118,6 @@ class MainMenuScene extends Phaser.Scene {
         this.fragmentsText = this.add.text(500, 145, '', { fontSize: '24px', color: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
         this.gearPanel.add([this.eqList, this.invList, this.fragmentsText]);
 
-        // === 裝備互動彈窗 ===
         this.actionPopup = this.add.container(0, 0).setVisible(false).setDepth(5000);
         const popupBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.5).setInteractive();
         this.actionPopup.add([popupBg, this.add.rectangle(500, 400, 400, 300, 0x222233).setStrokeStyle(3, 0x00ffff)]);
@@ -124,7 +129,6 @@ class MainMenuScene extends Phaser.Scene {
         const closeGear = this.add.rectangle(500, 720, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleGearPanel(false));
         this.gearPanel.add([closeGear, this.add.text(500, 720, '返回', { fontSize: '24px', color: '#ffffff' }).setOrigin(0.5)]);
 
-        // === 圖鑑面板 ===
         this.bestiaryPanel = this.add.container(0, 0).setVisible(false).setDepth(3000);
         const bestiaryBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.95).setInteractive();
         this.bestiaryPanel.add([bestiaryBg, this.add.rectangle(500, 400, 800, 600, 0x111122).setStrokeStyle(4, 0x00ffaa)]);
@@ -137,7 +141,6 @@ class MainMenuScene extends Phaser.Scene {
         const closeBestiary = this.add.rectangle(500, 650, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleBestiary(false));
         this.bestiaryPanel.add([closeBestiary, this.add.text(500, 650, '關閉圖鑑', { fontSize: '24px', color: '#ff0000' }).setOrigin(0.5)]);
 
-        // === 軍械庫 ===
         this.shopPanel = this.add.container(0, 0).setVisible(false).setDepth(1000);
         const shopBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.9).setInteractive();
         this.shopPanel.add([shopBg, this.add.rectangle(500, 400, 600, 600, 0x111122).setStrokeStyle(4, 0x00ffff)]);
@@ -154,7 +157,6 @@ class MainMenuScene extends Phaser.Scene {
         const closeShop = this.add.rectangle(500, 700, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleShop(false));
         this.shopPanel.add([closeShop, this.add.text(500, 700, '關閉', { fontSize: '24px', color: '#00ffff' }).setOrigin(0.5)]);
 
-        // === 特工選擇 ===
         this.charPanel = this.add.container(0, 0).setVisible(false).setDepth(2000);
         const charBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.9).setInteractive();
         this.charPanel.add([charBg, this.add.rectangle(500, 400, 850, 550, 0x111122).setStrokeStyle(4, 0x00ffff)]);
@@ -192,7 +194,7 @@ class MainMenuScene extends Phaser.Scene {
                     d.unlockedChars.push(char.id);
                     saveCoins(d.coins);
                     saveChars(d.unlockedChars);
-                    this.coinText.setText(`💰 星幣: ${d.coins}`);
+                    this.coinText.setText(`${d.coins}`);
                     this.updateCharUI();
                 }
             });
@@ -203,6 +205,19 @@ class MainMenuScene extends Phaser.Scene {
         this.charPanel.add([closeChar, this.add.text(500, 620, '返回', { fontSize: '24px', color: '#ff0000' }).setOrigin(0.5)]);
 
         this.updateCharUI();
+    }
+
+    createInvisibleBtn(x, y, w, h, cb) {
+        // 建立完全透明的點擊熱區
+        const hitZone = this.add.rectangle(x, y, w, h, 0xffffff, 0).setInteractive({ useHandCursor: true });
+
+        // 滑鼠懸停時不再顯示白色方塊，而是播放微弱的系統音效提示
+        hitZone.on('pointerover', () => {
+            try { this.sound.play('sfx_pickup', { volume: 0.1 }); } catch (e) { }
+        });
+
+        // 點擊時觸發原本的功能
+        hitZone.on('pointerdown', cb);
     }
 
     updateCharUI() {
@@ -219,11 +234,6 @@ class MainMenuScene extends Phaser.Scene {
         });
     }
 
-    createBtn(y, txt, clr, cb) {
-        const b = this.add.rectangle(500, y, 420, 70, clr, 0.8).setInteractive({ useHandCursor: true });
-        this.add.text(500, y, txt, { fontSize: '32px', color: '#fff', fontStyle: 'bold', padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
-        b.on('pointerdown', cb);
-    }
     toggleShop(v) { this.shopPanel.setVisible(v); }
     toggleCharPanel(v) { this.charPanel.setVisible(v); }
     toggleBestiary(v) { if (v) this.updateBestiaryUI(); this.bestiaryPanel.setVisible(v); }
@@ -406,7 +416,7 @@ class MainGameScene extends Phaser.Scene {
 
         // === 動態波次系統變數 ===
         this.currentWaveMinute = 0;
-        this.waveEventsTriggered = { 90: false, 150: false, 270: false }; 
+        this.waveEventsTriggered = { 90: false, 150: false, 270: false };
 
         if (meta.equipped) {
             Object.values(meta.equipped).forEach(item => {
@@ -481,11 +491,11 @@ class MainGameScene extends Phaser.Scene {
                 p.setScale(Phaser.Math.FloatBetween(2.5, 4.0));
 
                 // 關鍵修復 1：設定完美的圓形碰撞框 (半徑取原圖寬度的一半)
-                p.setCircle(p.width / 2); 
+                p.setCircle(p.width / 2);
 
                 // 關鍵修復 2：賦予初始角度，並使用物理引擎的角速度來產生物理自轉
                 p.setRotation(Math.random() * Math.PI);
-                p.setAngularVelocity(Phaser.Math.Between(-15, 15)); 
+                p.setAngularVelocity(Phaser.Math.Between(-15, 15));
 
                 this.pillarRects.push(new Phaser.Geom.Rectangle(px - 80, py - 80, 160, 160));
                 placedPillars.push({ x: px, y: py });
@@ -508,7 +518,7 @@ class MainGameScene extends Phaser.Scene {
         this.physics.add.overlap(this.player, this.fragmentGroup, (p, f) => { f.destroy(); this.currentXP++; if (this.currentXP >= this.targetXP) this.showLevelUp(); this.updateHUD(); }, null, this);
         this.physics.add.overlap(this.player, this.itemGroup, (p, i) => {
             try { this.sound.play('sfx_pickup', { volume: 0.4 }); } catch (e) { }
-            
+
             let type = i.getData('type');
             if (type === 'nuke') {
                 // 全銀幕清怪
@@ -519,7 +529,7 @@ class MainGameScene extends Phaser.Scene {
                 });
             } else if (type === 'shield') {
                 // 5 秒絕對無敵
-                this.isUltInvincible = true; 
+                this.isUltInvincible = true;
                 this.player.setTint(0x00ffff);
                 this.time.delayedCall(5000, () => {
                     this.isUltInvincible = false;
@@ -530,17 +540,17 @@ class MainGameScene extends Phaser.Scene {
             } else if (type === 'magnet') {
                 // 全地圖磁吸
                 this.fragmentGroup.getChildren().forEach(f => {
-                    this.tweens.add({ targets: f, x: this.player.x, y: this.player.y, duration: 600, onComplete: () => { if(f.active) { f.destroy(); this.currentXP++; this.updateHUD(); if(this.currentXP >= this.targetXP) this.showLevelUp(); } } });
+                    this.tweens.add({ targets: f, x: this.player.x, y: this.player.y, duration: 600, onComplete: () => { if (f.active) { f.destroy(); this.currentXP++; this.updateHUD(); if (this.currentXP >= this.targetXP) this.showLevelUp(); } } });
                 });
-            } else if (i.texture.key === 'coin') { 
-                this.totalCoins++; 
-            } else if (i.texture.key === 'medkit') { 
-                this.currentHP = Math.min(this.maxHP, this.currentHP + 20); 
+            } else if (i.texture.key === 'coin') {
+                this.totalCoins++;
+            } else if (i.texture.key === 'medkit') {
+                this.currentHP = Math.min(this.maxHP, this.currentHP + 20);
             } else if (i.texture.key === 'supplyBox') {
                 this.breakSupply(i);
                 return; // breakSupply 會銷毀 i，這裡提早回傳
             }
-            
+
             i.destroy();
             this.updateHUD();
         }, null, this);
@@ -646,8 +656,8 @@ class MainGameScene extends Phaser.Scene {
         this.quitBtn.on('pointerdown', () => {
             this.sound.stopAll();
             if (!this.isTestMode) {
-                const data = loadGameData(); 
-                data.coins += this.totalCoins; 
+                const data = loadGameData();
+                data.coins += this.totalCoins;
                 saveCoins(data.coins);
             }
             this.scene.start('MainMenuScene');
@@ -657,18 +667,18 @@ class MainGameScene extends Phaser.Scene {
         const goBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.85); // 移除背景的 setInteractive，避免搶走點擊
         const goTitle = this.add.text(500, 250, '特工任務失敗', { fontSize: '80px', color: '#ff0000', fontStyle: 'bold', padding: { top: 20, bottom: 20 } }).setOrigin(0.5);
         this.finalCoinsText = this.add.text(500, 420, '', { fontSize: '32px', color: '#ffff00', padding: { top: 10, bottom: 10 } }).setOrigin(0.5);
-        
+
         const goBtn = this.add.rectangle(500, 580, 360, 80, 0x333333).setInteractive({ useHandCursor: true }).setStrokeStyle(2, 0x00ffff);
         const goTxt = this.add.text(500, 580, '回歸總部 (結算)', { fontSize: '28px', color: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
-        
+
         // 懸停特效
         goBtn.on('pointerover', () => { goBtn.setFillStyle(0x444444); goBtn.setStrokeStyle(4, 0xffffff); });
         goBtn.on('pointerout', () => { goBtn.setFillStyle(0x333333); goBtn.setStrokeStyle(2, 0x00ffff); });
-        
+
         goBtn.on('pointerdown', () => {
-            try { this.sound.stopAll(); } catch(e) {}
-            this.scene.stop('MainGameScene'); 
-            this.scene.start('MainMenuScene'); 
+            try { this.sound.stopAll(); } catch (e) { }
+            this.scene.stop('MainGameScene');
+            this.scene.start('MainMenuScene');
         });
 
         this.gameOverPanel.add([goBg, goTitle, this.finalCoinsText, goBtn, goTxt]);
@@ -782,7 +792,7 @@ class MainGameScene extends Phaser.Scene {
             if (!this.bossActive && minute !== this.currentWaveMinute) {
                 this.currentWaveMinute = minute;
                 // 每過一分鐘，生成延遲減少 150ms，最低不低於 300ms
-                let newDelay = Math.max(300, 1500 - (minute * 150)); 
+                let newDelay = Math.max(300, 1500 - (minute * 150));
                 this.spawnEvent.delay = newDelay;
                 this.showBossWarning(`第 ${minute + 1} 波 異種來襲`);
             }
@@ -793,23 +803,23 @@ class MainGameScene extends Phaser.Scene {
 
                 if (this.survivalSeconds === 90) { // 1:30 幽靈潛伏
                     this.showBossWarning("警告：偵測到光學迷彩訊號");
-                    for(let i=0; i<10; i++) {
+                    for (let i = 0; i < 10; i++) {
                         let a = this.ghostGroup.create(this.player.x + Phaser.Math.Between(-400, 400), this.player.y + Phaser.Math.Between(-400, 400), 'ghost_ship');
                         a.hp = 2; a.maxHP = 2; a.setCollideWorldBounds(true);
                     }
                 }
                 else if (this.survivalSeconds === 150) { // 2:30 裝甲包圍網
                     this.showBossWarning("警告：偵測到裝甲方陣包圍");
-                    for(let i=0; i<16; i++) {
-                        let ang = (i/16) * Math.PI * 2;
-                        let a = this.alienGroup.create(this.player.x + Math.cos(ang)*700, this.player.y + Math.sin(ang)*700, 'armored_ship').setScale(2.0);
+                    for (let i = 0; i < 16; i++) {
+                        let ang = (i / 16) * Math.PI * 2;
+                        let a = this.alienGroup.create(this.player.x + Math.cos(ang) * 700, this.player.y + Math.sin(ang) * 700, 'armored_ship').setScale(2.0);
                         a.hp = 20; a.maxHP = 20; a.setCollideWorldBounds(true);
                     }
                 }
                 else if (this.survivalSeconds === 270) { // 4:30 獵犬狂潮
                     this.showBossWarning("警告：大量高速實體接近");
-                    for(let i=0; i<25; i++) {
-                        let a = this.alienGroup.create(100, Phaser.Math.Between(100, WORLD_SIZE-100), 'hound_ship');
+                    for (let i = 0; i < 25; i++) {
+                        let a = this.alienGroup.create(100, Phaser.Math.Between(100, WORLD_SIZE - 100), 'hound_ship');
                         a.hp = 5; a.maxHP = 5; a.setCollideWorldBounds(true);
                     }
                 }
@@ -874,7 +884,7 @@ class MainGameScene extends Phaser.Scene {
 
                 // === 質子冰爆：定身邏輯 ===
                 if (a.isFrozen) {
-                    if (time > a.frozenTimer) { a.isFrozen = false; a.clearTint(); } 
+                    if (time > a.frozenTimer) { a.isFrozen = false; a.clearTint(); }
                     else { a.setVelocity(0, 0); return; } // 凍結時停在原地並跳過 AI 邏輯
                 }
 
@@ -979,7 +989,7 @@ class MainGameScene extends Phaser.Scene {
         if (!this.bossSkillTimers['base']) this.bossSkillTimers['base'] = 0;
         if (time - this.bossSkillTimers['base'] > 3000) {
             this.bossSkillTimers['base'] = time;
-            for(let i = -1; i <= 1; i++) {
+            for (let i = -1; i <= 1; i++) {
                 let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'novaBullet').setTint(0xff0000);
                 let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y) + (i * 0.2);
                 b.setVelocity(Math.cos(ang) * 250, Math.sin(ang) * 250);
@@ -1033,7 +1043,7 @@ class MainGameScene extends Phaser.Scene {
                     if (dist < 600) { // 只有在 600 像素內才有吸力
                         let angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.boss.x, this.boss.y);
                         // 吸力隨距離衰減，且基礎強度從 15 降至 8
-                        let force = (1 - dist / 600) * 8; 
+                        let force = (1 - dist / 600) * 8;
                         this.player.body.velocity.x += Math.cos(angle) * force;
                         this.player.body.velocity.y += Math.sin(angle) * force;
                     }
@@ -1142,9 +1152,9 @@ class MainGameScene extends Phaser.Scene {
 
     spawnBoss() {
         if (this.bossActive) return;
-        this.bossActive = true; 
+        this.bossActive = true;
         this.spawnEvent.paused = true;
-        
+
         this.cameras.main.flash(500, 255, 0, 0);
         this.cameras.main.shake(500, 0.02);
         try { this.sound.play('sfx_alert', { volume: 0.6 }); } catch (e) { }
@@ -1171,26 +1181,26 @@ class MainGameScene extends Phaser.Scene {
             this.boss.setScale(2.5).setDepth(2000).setCollideWorldBounds(true);
             this.boss.setImmovable(false);
             this.boss.setDrag(150);
-            
+
             // 出場特效：擊退玩家
             this.cameras.main.shake(500, 0.02);
             let angle = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
             this.player.body.velocity.set(Math.cos(angle) * 1000, Math.sin(angle) * 1000);
 
-            this.boss.hp = 500 + this.bossCount * 250; 
+            this.boss.hp = 500 + this.bossCount * 250;
             this.maxBossHP = this.boss.hp;
-            this.bossHP = this.boss.hp; 
+            this.bossHP = this.boss.hp;
             this.boss.phaseMarks = [0.8, 0.5, 0.2];
-            this.boss.isBoss = true; 
+            this.boss.isBoss = true;
             this.bossHud.setVisible(true);
-            this.bossCount++; 
+            this.bossCount++;
 
             // 初始解鎖 1 個隨機基礎技能
             this.bossSkills = [Phaser.Utils.Array.GetRandom(['死亡彈幕', '野蠻衝撞', '追蹤機雷'])];
 
-            if (!this.isTestMode && !this.bestiary.monsters.includes('boss')) { 
-                this.bestiary.monsters.push('boss'); 
-                saveBestiary(this.bestiary); 
+            if (!this.isTestMode && !this.bestiary.monsters.includes('boss')) {
+                this.bestiary.monsters.push('boss');
+                saveBestiary(this.bestiary);
             }
         });
     }
@@ -1269,7 +1279,7 @@ class MainGameScene extends Phaser.Scene {
                     closest.setTintFill(0x00ffff);
                     closest.isFrozen = true;
                     // 凍結時間：一般怪 2 秒，Boss 只有 0.5 秒
-                    closest.frozenTimer = this.time.now + (isBoss ? 500 : 2000); 
+                    closest.frozenTimer = this.time.now + (isBoss ? 500 : 2000);
                 }
 
                 // === 分裂彈頭特效 ===
@@ -1334,33 +1344,33 @@ class MainGameScene extends Phaser.Scene {
         a.destroy();
     }
 
-    spawnSupply() { 
-        let x = Phaser.Math.Between(100, WORLD_SIZE-100);
-        let y = Phaser.Math.Between(100, WORLD_SIZE-100);
+    spawnSupply() {
+        let x = Phaser.Math.Between(100, WORLD_SIZE - 100);
+        let y = Phaser.Math.Between(100, WORLD_SIZE - 100);
         let s = this.itemGroup.create(x, y, 'supplyBox');
         s.setScale(0.8); // 縮放到合適大小
         s.setRotation(Math.random() * Math.PI); // 隨機旋轉
     }
-    
-    breakSupply(s) { 
+
+    breakSupply(s) {
         try { this.sound.play('sfx_explode', { volume: 0.1 }); } catch (e) { } // 播放微弱爆炸聲
         this.cameras.main.shake(100, 0.005); // 輕微畫面抖動
-        
+
         let r = Math.random();
         // 5% 核彈, 10% 護盾, 10% 全域磁鐵, 50% 醫療包, 25% 星幣
         if (r < 0.05) this.itemGroup.create(s.x, s.y, 'item_nuke').setData('type', 'nuke');
         else if (r < 0.15) this.itemGroup.create(s.x, s.y, 'item_shield').setData('type', 'shield');
         else if (r < 0.25) this.itemGroup.create(s.x, s.y, 'item_magnet').setData('type', 'magnet');
-        else if (r < 0.75) this.itemGroup.create(s.x, s.y, 'medkit'); 
-        else this.itemGroup.create(s.x, s.y, 'coin'); 
-        
-        s.destroy(); 
+        else if (r < 0.75) this.itemGroup.create(s.x, s.y, 'medkit');
+        else this.itemGroup.create(s.x, s.y, 'coin');
+
+        s.destroy();
     }
 
-    showLevelUp() { 
-        this.isPaused = true; 
-        this.physics.pause(); 
-        this.upgradeOverlay.setVisible(true); 
+    showLevelUp() {
+        this.isPaused = true;
+        this.physics.pause();
+        this.upgradeOverlay.setVisible(true);
 
         let pool = [];
         if (this.skills.power < 10) pool.push({ k: 'power', n: `核心威力 Lv.${this.skills.power + 1}`, d: '提升雷射基礎傷害' });
@@ -1380,13 +1390,13 @@ class MainGameScene extends Phaser.Scene {
         let picked = Phaser.Utils.Array.Shuffle(pool).slice(0, 3);
         while (picked.length < 3) picked.push({ k: 'heal', n: '緊急修復', d: '恢復 30% 最大生命值' });
 
-        this.upgradeCards.forEach((card, i) => { 
+        this.upgradeCards.forEach((card, i) => {
             let sk = picked[i];
-            card.c.setVisible(true); 
-            card.t.setText(sk.n + '\n\n' + sk.d).setVisible(true).setFontSize('20px'); 
-            card.type = sk.k; 
-            card.c.removeAllListeners('pointerdown').on('pointerdown', () => this.applyUpgrade(card.type)); 
-        }); 
+            card.c.setVisible(true);
+            card.t.setText(sk.n + '\n\n' + sk.d).setVisible(true).setFontSize('20px');
+            card.type = sk.k;
+            card.c.removeAllListeners('pointerdown').on('pointerdown', () => this.applyUpgrade(card.type));
+        });
     }
 
     applyUpgrade(type) {
@@ -1398,8 +1408,8 @@ class MainGameScene extends Phaser.Scene {
         else if (type === 'explode') this.skills.explode++;
         else if (type === 'heal') this.currentHP = Math.min(this.maxHP, this.currentHP + this.maxHP * 0.3);
 
-        this.currentXP = 0; 
-        this.targetXP += 5; 
+        this.currentXP = 0;
+        this.targetXP += 5;
         this.upgradeOverlay.setVisible(false);
         this.upgradeCards.forEach(obj => { obj.c.setVisible(false); obj.t.setVisible(false); });
         this.isPaused = false;
@@ -1615,8 +1625,8 @@ class MainGameScene extends Phaser.Scene {
         this.tweens.killTweensOf(this.bossWarningTxt);
 
         if (!this.isTestMode) {
-            const data = loadGameData(); 
-            data.coins += this.totalCoins; 
+            const data = loadGameData();
+            data.coins += this.totalCoins;
             saveCoins(data.coins);
         }
         this.gameOverPanel.setVisible(true); this.finalCoinsText.setText(`本次任務共獲取： ${this.totalCoins} 枚星幣`);
@@ -1671,9 +1681,9 @@ class MainGameScene extends Phaser.Scene {
         if (type === 'armored') a.setScale(2.0);
         a.setCollideWorldBounds(true);
 
-        if (!this.isTestMode && !this.bestiary.monsters.includes(type)) { 
-            this.bestiary.monsters.push(type); 
-            saveBestiary(this.bestiary); 
+        if (!this.isTestMode && !this.bestiary.monsters.includes(type)) {
+            this.bestiary.monsters.push(type);
+            saveBestiary(this.bestiary);
         }
 
         a.hp = 1 + Math.floor(this.survivalSeconds / 60) * (type === 'armored' ? 4 : 1); a.maxHP = a.hp;
