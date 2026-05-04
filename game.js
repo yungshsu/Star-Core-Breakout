@@ -524,18 +524,19 @@ class MainGameScene extends Phaser.Scene {
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE); // 綁定空白鍵
         this.keys = this.input.keyboard.addKeys('W,A,S,D');
         
-        // === 行動裝置適配：多點觸控與虛擬搖桿 ===
-        this.input.addPointer(2); // 支援 3 指觸控 (1 原生 + 2 新增)
+        // === 修復版虛擬搖桿：螢幕座標與防抖死區 ===
+        this.input.addPointer(2); // 基礎多點觸控
 
         this.joyBase = this.add.circle(0, 0, 60, 0x888888, 0.4).setScrollFactor(0).setDepth(9000).setVisible(false);
         this.joyThumb = this.add.circle(0, 0, 30, 0xcccccc, 0.8).setScrollFactor(0).setDepth(9001).setVisible(false);
 
         this.input.on('pointerdown', (pointer) => {
-            // 螢幕左半部觸發搖桿
-            if (pointer.x < 500 && !this.joyPointer) {
+            // 判斷是否點擊在左半邊螢幕 (使用螢幕寬度的一半)
+            if (pointer.x < canvasWidth / 2 && !this.joyPointer) {
                 this.joyPointer = pointer;
                 this.joyBase.setPosition(pointer.x, pointer.y).setVisible(true);
                 this.joyThumb.setPosition(pointer.x, pointer.y).setVisible(true);
+                this.joyVector.set(0, 0);
             }
         });
 
@@ -543,11 +544,22 @@ class MainGameScene extends Phaser.Scene {
             if (pointer === this.joyPointer) {
                 let dx = pointer.x - this.joyBase.x;
                 let dy = pointer.y - this.joyBase.y;
-                let dist = Math.sqrt(dx*dx + dy*dy);
+                let dist = Math.sqrt(dx * dx + dy * dy);
                 let maxDist = 60;
-                if (dist > maxDist) { dx = (dx / dist) * maxDist; dy = (dy / dist) * maxDist; }
+                
+                if (dist > maxDist) {
+                    dx = (dx / dist) * maxDist;
+                    dy = (dy / dist) * maxDist;
+                }
+
                 this.joyThumb.setPosition(this.joyBase.x + dx, this.joyBase.y + dy);
-                this.joyVector.set(dx / maxDist, dy / maxDist); // 歸一化向量
+
+                // 只有超過 5 像素死區才算移動
+                if (dist > 5) {
+                    this.joyVector.set(dx / maxDist, dy / maxDist);
+                } else {
+                    this.joyVector.set(0, 0);
+                }
             }
         });
 
@@ -559,6 +571,7 @@ class MainGameScene extends Phaser.Scene {
                 this.joyVector.set(0, 0);
             }
         });
+
 
         // 右側大招按鍵
         this.mobileUltBtn = this.add.circle(850, 650, 50, 0xffaa00, 0.6).setScrollFactor(0).setDepth(9000).setInteractive();
@@ -1402,5 +1415,14 @@ class MainGameScene extends Phaser.Scene {
     togglePause() { this.isPaused = !this.isPaused; const v = this.isPaused; this.isPaused ? this.physics.pause() : this.physics.resume(); this.pauseOverlay.setVisible(v); this.quitBtn.setVisible(v); this.quitTxt.setVisible(v); }
 }
 
-const config = { type: Phaser.AUTO, width: canvasWidth, height: canvasHeight, parent: 'game-container', backgroundColor: '#0a0a1a', physics: { default: 'arcade', arcade: { gravity: { y: 0 } } }, scene: [MainMenuScene, MainGameScene] };
+const config = {
+    type: Phaser.AUTO,
+    width: canvasWidth,
+    height: canvasHeight,
+    parent: 'game-container',
+    backgroundColor: '#0a0a1a',
+    input: { activePointers: 3 },
+    physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
+    scene: [MainMenuScene, MainGameScene]
+};
 const game = new Phaser.Game(config);
