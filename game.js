@@ -120,7 +120,8 @@ class MainMenuScene extends Phaser.Scene {
             const x = 220 + i * 280;
             const slot = this.add.container(x, 400);
             slot.add(this.add.rectangle(0, 0, 240, 320, 0x1a1a2e).setStrokeStyle(2, char.color));
-            slot.add(this.add.circle(0, -80, 40, char.color));
+            slot.add(this.add.sprite(0, -80, 'agent_ship').setScale(1.5));
+
             slot.add(this.add.text(0, -20, char.name, { fontSize: '22px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
             slot.add(this.add.text(0, 40, char.desc, { fontSize: '16px', color: '#ccc', align: 'center' }).setOrigin(0.5));
             
@@ -417,8 +418,23 @@ class MainGameScene extends Phaser.Scene {
 
 
     preload() {
+        // 載入外部美術資源 (全面圖片化)
+        this.load.image('space_bg', 'https://labs.phaser.io/assets/skies/deep-space.jpg');
+        this.load.image('agent_ship', 'https://labs.phaser.io/assets/sprites/shmup-ship.png');
+        this.load.image('alien_ship', 'https://labs.phaser.io/assets/sprites/space-baddie.png');
+        // 載入多種形狀的隕石
+        this.load.image('asteroid1', 'https://labs.phaser.io/assets/games/asteroids/asteroid1.png');
+        this.load.image('asteroid2', 'https://labs.phaser.io/assets/games/asteroids/asteroid2.png');
+        this.load.image('asteroid3', 'https://labs.phaser.io/assets/games/asteroids/asteroid3.png');
+        this.load.image('boss', 'https://labs.phaser.io/assets/sprites/bsquadron1.png');
+ // 敵方母艦
+        this.load.image('coin', 'https://labs.phaser.io/assets/sprites/coin.png');
+        this.load.image('medkit', 'https://labs.phaser.io/assets/sprites/firstaid.png');
+
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ffff).fillCircle(4, 4, 4).generateTexture('laserSpark', 8, 8);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ffff, 0.9).fillCircle(12, 12, 12).generateTexture('shieldBall', 24, 24);
+        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00aaff).fillCircle(20, 20, 20).generateTexture('agent', 40, 40); // 備援圖形
+
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xaa00ff).fillRect(0, 0, 16, 16).generateTexture('alien', 16, 16);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffaa00).fillRect(0, 0, 12, 12).generateTexture('striker', 12, 12);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xff0000).fillRect(0, 0, 24, 24).generateTexture('elite', 24, 24);
@@ -427,36 +443,32 @@ class MainGameScene extends Phaser.Scene {
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffa500).fillRect(0, 0, 18, 18).generateTexture('hound', 18, 18);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xff00ff).fillCircle(5, 5, 5).fillStyle(0xffffff).fillCircle(5, 5, 2).generateTexture('novaBullet', 10, 10);
 
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00aaff).fillCircle(20, 20, 20).generateTexture('agent', 40, 40);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x8800ff).fillRect(0, 0, 30, 30).lineStyle(2, 0xff00ff).strokeRect(0, 0, 30, 30).generateTexture('gearBox', 30, 30);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x550000).fillRect(0, 0, 120, 120).lineStyle(4, 0xff0000).strokeRect(2, 2, 116, 116).generateTexture('boss', 120, 120);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x333333).fillRect(0, 0, 60, 150).generateTexture('pillar', 60, 150);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffff00).fillCircle(6, 6, 6).generateTexture('coin', 12, 12);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffffff).fillCircle(4, 4, 4).generateTexture('fragment', 8, 8);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ff00).fillRect(0, 0, 20, 20).generateTexture('medkit', 20, 20);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x8b4513).fillRect(0, 0, 32, 32).generateTexture('supplyBox', 32, 32);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffd700).fillRect(0, 0, 40, 30).generateTexture('superChest', 40, 30);
+        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffffff).fillCircle(4, 4, 4).generateTexture('fragment', 8, 8);
+        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x8b4513).fillRect(0, 0, 32, 32).generateTexture('supplyBox', 32, 32);
     }
+
+
 
     create() {
         this.physics.world.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
         this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
+        this.cameras.main.setBackgroundColor('#050510');
+
+        // 建立平鋪星空背景 (Parallax)
+        this.starBackground = this.add.tileSprite(WORLD_SIZE/2, WORLD_SIZE/2, WORLD_SIZE, WORLD_SIZE, 'space_bg').setDepth(0);
         
-        this.player = this.physics.add.sprite(WORLD_SIZE/2, WORLD_SIZE/2, 'agent').setCollideWorldBounds(true).setDrag(2500).setMaxVelocity(260 * this.speedMod).setDepth(10);
-        this.player.setCircle(15, 5, 5);
+        this.player = this.physics.add.sprite(WORLD_SIZE/2, WORLD_SIZE/2, 'agent_ship').setScale(1.8).setCollideWorldBounds(true).setDrag(2500).setMaxVelocity(260 * this.speedMod).setDepth(10);
+        this.player.setCircle(12, 4, 4); // 配合放大後的機體優化碰撞範圍
+
+
         this.player.isInvulnerable = false;
         
-        // 套用特工外觀 Tint
-        if (this.charId === 'phantom') this.player.setTint(0xff00ff);
-        else if (this.charId === 'titan') this.player.setTint(0xffaa00);
+        // 套用特工外觀 Tint (基於飛船圖片)
+        if (this.charId === 'phantom') this.player.setTint(0xff88ff);
+        else if (this.charId === 'titan') this.player.setTint(0xffcc88);
 
-
-
-        const gridGfx = this.add.graphics();
-        gridGfx.lineStyle(2, 0x1a1a2e, 0.5);
-        for(let x=0; x<=WORLD_SIZE; x+=100) gridGfx.lineBetween(x, 0, x, WORLD_SIZE);
-        for(let y=0; y<=WORLD_SIZE; y+=100) gridGfx.lineBetween(0, y, WORLD_SIZE, y);
-        gridGfx.setDepth(0);
 
         this.alienGroup = this.physics.add.group();
         this.ghostGroup = this.physics.add.group(); 
@@ -476,20 +488,29 @@ class MainGameScene extends Phaser.Scene {
                 px = Phaser.Math.Between(300, 1700);
                 py = Phaser.Math.Between(300, 1700);
                 valid = true;
-                // 距離特工出生點至少 300 像素
-                if (Phaser.Math.Distance.Between(px, py, WORLD_SIZE/2, WORLD_SIZE/2) < 300) valid = false;
-                // 與其他柱子至少保持 250 像素的距離
+                // 距離特工出生點至少 350 像素
+                if (Phaser.Math.Distance.Between(px, py, WORLD_SIZE/2, WORLD_SIZE/2) < 350) valid = false;
+                // 與其他巨型隕石至少保持 400 像素的距離，避免重疊
                 for (let p of placedPillars) {
-                    if (Phaser.Math.Distance.Between(px, py, p.x, p.y) < 250) { valid = false; break; }
+                    if (Phaser.Math.Distance.Between(px, py, p.x, p.y) < 400) { valid = false; break; }
                 }
+
                 attempts++;
             }
             if (valid) {
-                placedPillars.push({x: px, y: py});
-                this.pillarGroup.create(px, py, 'pillar');
-                this.pillarRects.push(new Phaser.Geom.Rectangle(px - 30, py - 75, 60, 150));
+                // 隨機挑選一種隕石形狀
+                const asteroidKey = Phaser.Utils.Array.GetRandom(['asteroid1', 'asteroid2', 'asteroid3']);
+                // 生成巨型隕石並設定隨機大小與旋轉
+                let p = this.pillarGroup.create(px, py, asteroidKey).setImmovable(true);
+
+                p.setScale(Phaser.Math.FloatBetween(2.5, 4.0));
+                p.setRotation(Math.random() * Math.PI);
+                // 調整巨型隕石碰撞區 (適應放大後的尺寸)
+                this.pillarRects.push(new Phaser.Geom.Rectangle(px - 80, py - 80, 160, 160));
+                placedPillars.push({ x: px, y: py });
             }
         }
+
 
         this.laserGfx = this.add.graphics().setDepth(1000).setBlendMode(Phaser.BlendModes.ADD);
         this.bossGfx = this.add.graphics().setDepth(2001);
@@ -654,7 +675,18 @@ class MainGameScene extends Phaser.Scene {
         if (this.isPaused || this.isGameOver) return;
 
         this.handleSurvivalTime(delta);
+        
+        // 背景視差滾動
+        if (this.starBackground) {
+            this.starBackground.tilePositionX = this.cameras.main.scrollX * 0.3;
+            this.starBackground.tilePositionY = this.cameras.main.scrollY * 0.3;
+        }
+
+        // 隕石自轉效果
+        this.pillarGroup.getChildren().forEach(p => p.rotation += 0.005);
+
         this.handlePlayerMovement();
+
         this.handleShields(time);
         this.handleEMP(time);
         this.renderLasers();
@@ -664,6 +696,7 @@ class MainGameScene extends Phaser.Scene {
         
         if (this.bossActive) this.executeBossSkills(time, delta);
         this.renderBlackout();
+
         
         // 檢查大招觸發
         if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
@@ -683,25 +716,7 @@ class MainGameScene extends Phaser.Scene {
         }
     }
 
-    handlePlayerMovement() {
-        const acc = 2200;
-        let speedMod = this.speedMod; // 基礎特工速度補正
-        
-        // 冰霜光環緩速判定 (死後也能生效)
-        if (this.frostAuraState.active) {
-            if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.frostAuraState.x, this.frostAuraState.y) < 250) {
-                speedMod *= 0.5; // 疊加緩速
-            }
-        }
 
-        if(this.keys.A.isDown) this.player.setAccelerationX(-acc * speedMod); 
-        else if(this.keys.D.isDown) this.player.setAccelerationX(acc * speedMod); 
-        else this.player.setAccelerationX(0);
-        
-        if(this.keys.W.isDown) this.player.setAccelerationY(-acc * speedMod); 
-        else if(this.keys.S.isDown) this.player.setAccelerationY(acc * speedMod); 
-        else this.player.setAccelerationY(0);
-    }
 
 
     handleEnvironment(time) {
@@ -796,6 +811,10 @@ class MainGameScene extends Phaser.Scene {
                 }
 
                 a.setVelocity(vx, vy);
+                
+                // 異種飛船轉向邏輯：始終面向玩家
+                a.setRotation(Phaser.Math.Angle.Between(a.x, a.y, this.player.x, this.player.y) + Math.PI / 2);
+
                 a.isAuraBuffed = false; 
                 
                 if(a.texture.key==='bomber' && Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) < 60) this.triggerBomber(a);
@@ -820,6 +839,14 @@ class MainGameScene extends Phaser.Scene {
     handlePlayerMovement() {
         if (this.isPaused || this.isGameOver || this.jammed) return;
         let acc = 2000; let speedMod = this.speedMod;
+
+        // 冰霜光環緩速判定
+        if (this.frostAuraState.active) {
+            if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.frostAuraState.x, this.frostAuraState.y) < 250) {
+                speedMod *= 0.5;
+            }
+        }
+
         let moveX = 0, moveY = 0;
 
         // 1. 鍵盤輸入
@@ -834,7 +861,13 @@ class MainGameScene extends Phaser.Scene {
 
         this.player.setAccelerationX(moveX * acc * speedMod);
         this.player.setAccelerationY(moveY * acc * speedMod);
+
+        // 飛船轉向邏輯
+        if (moveX !== 0 || moveY !== 0) {
+            this.player.setRotation(Math.atan2(moveY, moveX) + Math.PI / 2);
+        }
     }
+
 
 
     renderLasers() {
@@ -1037,9 +1070,10 @@ class MainGameScene extends Phaser.Scene {
 
         this.maxBossHP = 500 + (this.bossCount - 1) * 200; this.bossHP = this.maxBossHP;
         const bx = Phaser.Math.Clamp(this.player.x, 100, 1900), by = Phaser.Math.Clamp(this.player.y - 300, 100, 1900);
-        this.boss = this.alienGroup.create(bx, by, 'boss').setCollideWorldBounds(true);
+        this.boss = this.alienGroup.create(bx, by, 'boss').setCollideWorldBounds(true).setScale(1.5);
         this.boss.hp = this.bossHP; this.boss.phaseMarks = [0.8, 0.5, 0.2];
         this.bossHud.setVisible(true);
+
 
         // 遇見怪物解鎖邏輯 - Boss
         if(!this.bestiary.monsters.includes('boss')) { this.bestiary.monsters.push('boss'); saveBestiary(this.bestiary); }
@@ -1399,8 +1433,14 @@ class MainGameScene extends Phaser.Scene {
         if (this.isPaused || this.bossActive || (this.alienGroup.getLength() + this.ghostGroup.getLength()) >= ENTITY_CAP) return; 
         let type = 'alien'; let r = Math.random();
         if (r < 0.1) type = 'ghost'; else if (r < 0.2) type = 'armored'; else if (r < 0.3) type = 'hound'; 
-        let a = (type==='ghost'?this.ghostGroup:this.alienGroup).create(Phaser.Math.Between(100, WORLD_SIZE-100), Phaser.Math.Between(100, WORLD_SIZE-100), type); 
+        
+        // 基礎異種改用飛船圖片
+        const texture = type === 'alien' ? 'alien_ship' : type;
+        let a = (type==='ghost'?this.ghostGroup:this.alienGroup).create(Phaser.Math.Between(100, WORLD_SIZE-100), Phaser.Math.Between(100, WORLD_SIZE-100), texture); 
+        if (type === 'alien') a.setScale(1.5);
+
         a.setCollideWorldBounds(true);
+
 
         // 遇見怪物解鎖邏輯 - 小怪
         if(!this.bestiary.monsters.includes(type)) { this.bestiary.monsters.push(type); saveBestiary(this.bestiary); }
