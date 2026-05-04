@@ -71,7 +71,7 @@ class BootScene extends Phaser.Scene {
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x8800ff).fillRect(0, 0, 30, 30).lineStyle(2, 0xff00ff).strokeRect(0, 0, 30, 30).generateTexture('gearBox', 30, 30);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffd700).fillRect(0, 0, 40, 30).generateTexture('superChest', 40, 30);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xffffff).fillCircle(4, 4, 4).generateTexture('fragment', 8, 8);
-        this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x8b4513).fillRect(0, 0, 32, 32).generateTexture('supplyBox', 32, 32);
+        this.load.image('supplyBox', 'https://labs.phaser.io/assets/sprites/crate.png');
     }
     create() {
         this.scene.start('MainMenuScene');
@@ -401,6 +401,10 @@ class MainGameScene extends Phaser.Scene {
         this.joyVector = new Phaser.Math.Vector2(0, 0);
         this.joyPointer = null;
 
+        // === 動態波次系統變數 ===
+        this.currentWaveMinute = 0;
+        this.waveEventsTriggered = { 90: false, 150: false, 270: false }; 
+
         if (meta.equipped) {
             Object.values(meta.equipped).forEach(item => {
                 if (item && item.stats) {
@@ -713,8 +717,47 @@ class MainGameScene extends Phaser.Scene {
             this.survivalSeconds += Math.floor(this.survivalMS / 1000);
             this.survivalMS %= 1000;
             this.updateHUD();
-            let interval = this.isTestMode ? 10 : BOSS_SPAWN_INTERVAL;
-            if (this.survivalSeconds % interval === 0 && !this.bossActive) this.triggerBoss();
+
+            let minute = Math.floor(this.survivalSeconds / 60);
+
+            // 1. 每分鐘推進一次波次難度 (加快生成速度)
+            if (!this.bossActive && minute !== this.currentWaveMinute) {
+                this.currentWaveMinute = minute;
+                // 每過一分鐘，生成延遲減少 150ms，最低不低於 300ms
+                let newDelay = Math.max(300, 1500 - (minute * 150)); 
+                this.spawnEvent.delay = newDelay;
+                this.showBossWarning(`第 ${minute + 1} 波 異種來襲`);
+            }
+
+            // 2. 特殊陣型突襲事件
+            if (this.waveEventsTriggered[this.survivalSeconds] === false) {
+                this.waveEventsTriggered[this.survivalSeconds] = true;
+
+                if (this.survivalSeconds === 90) { // 1:30 幽靈潛伏
+                    this.showBossWarning("警告：偵測到光學迷彩訊號");
+                    for(let i=0; i<10; i++) {
+                        let a = this.ghostGroup.create(this.player.x + Phaser.Math.Between(-400, 400), this.player.y + Phaser.Math.Between(-400, 400), 'ghost_ship');
+                        a.hp = 2; a.maxHP = 2; a.setCollideWorldBounds(true);
+                    }
+                }
+                else if (this.survivalSeconds === 150) { // 2:30 裝甲包圍網
+                    this.showBossWarning("警告：偵測到裝甲方陣包圍");
+                    for(let i=0; i<16; i++) {
+                        let ang = (i/16) * Math.PI * 2;
+                        let a = this.alienGroup.create(this.player.x + Math.cos(ang)*700, this.player.y + Math.sin(ang)*700, 'armored_ship').setScale(2.0);
+                        a.hp = 20; a.maxHP = 20; a.setCollideWorldBounds(true);
+                    }
+                }
+                else if (this.survivalSeconds === 270) { // 4:30 獵犬狂潮
+                    this.showBossWarning("警告：大量高速實體接近");
+                    for(let i=0; i<25; i++) {
+                        let a = this.alienGroup.create(100, Phaser.Math.Between(100, WORLD_SIZE-100), 'hound_ship');
+                        a.hp = 5; a.maxHP = 5; a.setCollideWorldBounds(true);
+                    }
+                }
+            }
+
+            if (this.survivalSeconds % BOSS_SPAWN_INTERVAL === 0 && !this.bossActive && this.survivalSeconds > 0) this.spawnBoss();
         }
     }
 
@@ -1179,8 +1222,21 @@ class MainGameScene extends Phaser.Scene {
         a.destroy();
     }
 
-    spawnSupply() { this.itemGroup.create(Phaser.Math.Between(100, 1900), Phaser.Math.Between(100, 1900), 'supplyBox'); }
-    breakSupply(s) { if (Math.random() < 0.8) this.itemGroup.create(s.x, s.y, 'medkit'); else this.itemGroup.create(s.x, s.y, 'coin'); s.destroy(); }
+    spawnSupply() { 
+        let x = Phaser.Math.Between(100, WORLD_SIZE-100);
+        let y = Phaser.Math.Between(100, WORLD_SIZE-100);
+        let s = this.itemGroup.create(x, y, 'supplyBox');
+        s.setScale(0.8); // 縮放到合適大小
+        s.setRotation(Math.random() * Math.PI); // 隨機旋轉
+    }
+    
+    breakSupply(s) { 
+        try { this.sound.play('sfx_explode', { volume: 0.1 }); } catch (e) { } // 播放微弱爆炸聲
+        this.cameras.main.shake(100, 0.005); // 輕微畫面抖動
+        if (Math.random() < 0.8) this.itemGroup.create(s.x, s.y, 'medkit'); 
+        else this.itemGroup.create(s.x, s.y, 'coin'); 
+        s.destroy(); 
+    }
 
     showLevelUp() { 
         this.isPaused = true; 
@@ -1461,8 +1517,17 @@ class MainGameScene extends Phaser.Scene {
 
     spawnAlien() {
         if (this.isPaused || this.bossActive || (this.alienGroup.getLength() + this.ghostGroup.getLength()) >= ENTITY_CAP) return;
-        let type = 'alien'; let r = Math.random();
-        if (r < 0.1) type = 'ghost'; else if (r < 0.2) type = 'armored'; else if (r < 0.3) type = 'hound';
+
+        let minute = Math.floor(this.survivalSeconds / 60);
+        let pool = ['alien']; // 第 0 分鐘：純基礎異種
+
+        if (minute === 1) pool = ['alien', 'alien', 'striker']; // 引入突擊者
+        else if (minute === 2) pool = ['alien', 'striker', 'hound', 'armored']; // 全面開戰
+        else if (minute === 3) pool = ['striker', 'ghost']; // 安靜期
+        else if (minute === 4) pool = ['hound', 'hound', 'alien']; // 獵犬海
+        else if (minute >= 5) pool = ['armored', 'ghost', 'striker', 'hound', 'alien']; // 終極混戰
+
+        let type = Phaser.Utils.Array.GetRandom(pool);
 
         const texMap = { 'alien': 'alien_ship', 'ghost': 'ghost_ship', 'armored': 'armored_ship', 'hound': 'hound_ship', 'striker': 'striker_ship' };
         const texture = texMap[type] || 'alien_ship';
