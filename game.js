@@ -578,9 +578,10 @@ class MainGameScene extends Phaser.Scene {
         this.add.text(850, 650, 'ULT', { fontSize: '24px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
         this.mobileUltBtn.on('pointerdown', () => this.triggerUltimate(this.time.now));
 
-        // 右上角暫停按鈕
-        this.add.rectangle(950, 40, 50, 50, 0x000000, 0.5).setScrollFactor(0).setDepth(9000).setInteractive().on('pointerdown', () => this.togglePause());
-        this.add.text(950, 40, '||', { fontSize: '30px', color: '#fff' }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        // 左下角暫停按鈕 (避免與星幣重疊)
+        this.add.circle(80, 720, 45, 0x555555, 0.6).setScrollFactor(0).setDepth(9000).setInteractive().on('pointerdown', () => this.togglePause());
+        this.add.text(80, 720, 'PAUSE', { fontSize: '18px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+
 
         this.setupUI();
     }
