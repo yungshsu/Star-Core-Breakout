@@ -40,7 +40,7 @@ function saveBestiary(data) { localStorage.setItem('star_core_bestiary', JSON.st
 class BootScene extends Phaser.Scene {
     constructor() { super('BootScene'); }
     preload() {
-        this.add.text(500, 400, '系統載入中...', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
+        this.add.text(500, 400, '星核突圍中...', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
 
         this.load.image('space_bg', 'https://labs.phaser.io/assets/skies/deep-space.jpg');
         // 載入多方向機甲貼圖
@@ -95,6 +95,8 @@ class BootScene extends Phaser.Scene {
         // 載入全新設計的空投艙圖片與毒霧圖片
         this.load.image('supplyBox', './assets/supply_box.png');
         this.load.image('poisonCloud', './assets/poison_cloud.png');
+        // 載入次世代特工選擇面板底圖
+        this.load.image('uiCharSelect', './assets/ui_char_select.png');
     }
     create() {
         this.scene.start('MainMenuScene');
@@ -232,7 +234,7 @@ class MainMenuScene extends Phaser.Scene {
         closeShop.on('pointerdown', () => this.toggleShop(false));
         const closeTxt = this.add.text(500, 690, '關閉面板', { fontSize: '24px', color: '#ff0000', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5);
         this.shopPanel.add([closeShop, closeTxt]);
-        this.mutationList = this.add.container(700, 240);
+        this.mutationList = this.add.container(600, 240);
         this.bestiaryPanel.add([this.monsterList, this.mutationList]);
 
         const closeBestiary = this.add.rectangle(500, 650, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleBestiary(false));
@@ -240,60 +242,50 @@ class MainMenuScene extends Phaser.Scene {
 
         this.charPanel = this.add.container(0, 0).setVisible(false).setDepth(2000);
         const charBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.9).setInteractive();
-        this.charPanel.add([charBg, this.add.rectangle(500, 400, 850, 550, 0x111122).setStrokeStyle(4, 0x00ffff)]);
-        this.charPanel.add(this.add.text(500, 180, '選擇你的特工', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '42px', color: '#00ffff', fontStyle: 'bold', padding: { top: 10, bottom: 10 } }).setOrigin(0.5));
 
-        const charData = [
-            { id: 'alpha', name: 'Alpha (核心特工)', color: 0x00aaff, price: 0, desc: '均衡型機體\n標準配置' },
-            { id: 'phantom', name: 'Phantom (幻影)', color: 0xff00ff, price: 20, desc: '移速 +25%\nHP -20 | 自帶 EMP' },
-            { id: 'titan', name: 'Titan (泰坦)', color: 0xffaa00, price: 20, desc: '移速 -15%\nHP +50 | 自帶護盾 & 威力+1' }
-        ];
+        // 👇 1. 鋪上整張全新的 UI 底圖 (置中於畫面)
+        let uiImg = this.add.image(500, 400, 'uiCharSelect').setOrigin(0.5);
+        this.charPanel.add([charBg, uiImg]);
 
-        this.charButtons = [];
-        charData.forEach((char, i) => {
-            const x = 220 + i * 280;
-            const slot = this.add.container(x, 400);
-            slot.add(this.add.rectangle(0, 0, 240, 320, 0x1a1a2e).setStrokeStyle(2, char.color));
-            slot.add(this.add.sprite(0, -80, `mech_${char.id}_down`).setScale(0.9));
-
-            slot.add(this.add.text(0, 0, char.name, {
-                fontSize: '22px', color: '#fff', fontStyle: 'bold',
-                padding: { top: 10, bottom: 5 }
-            }).setOrigin(0.5));
-
-            slot.add(this.add.text(0, 45, char.desc, {
-                fontSize: '16px', color: '#ccc', align: 'center',
-                padding: { top: 5, bottom: 5 }
-            }).setOrigin(0.5));
-
-            const btn = this.add.rectangle(0, 115, 160, 45, 0x333333).setInteractive({ useHandCursor: true }).setStrokeStyle(2, char.color);
-            const btnTxt = this.add.text(0, 115, '', {
-                fontSize: '18px', color: '#fff',
-                padding: { top: 10, bottom: 5 }
-            }).setOrigin(0.5);
-            slot.add([btn, btnTxt]);
-
-            this.charButtons.push({ btn, btnTxt, char });
-
-            btn.on('pointerdown', () => {
-                const d = loadGameData();
-                const isUnlocked = d.unlockedChars.includes(char.id);
-                if (isUnlocked) {
-                    this.scene.start('MainGameScene', { isTestMode: false, char: char.id });
-                } else if (d.coins >= char.price) {
-                    d.coins -= char.price;
-                    d.unlockedChars.push(char.id);
-                    saveCoins(d.coins);
-                    saveChars(d.unlockedChars);
-                    this.coinText.setText(`${d.coins}`);
-                    this.updateCharUI();
-                }
+        // 👇 2. 建立「選擇特工」的透明點擊感應區 (Invisible Hitboxes)
+        const charIds = ['alpha', 'phantom', 'titan'];
+        const createCharZone = (x, y, w, h, idx) => {
+            let zone = this.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
+            zone.on('pointerdown', () => {
+                const charId = charIds[idx];
+                this.scene.start('MainGameScene', { isTestMode: false, char: charId, overload: this.overloadConfig });
             });
-            this.charPanel.add(slot);
-        });
+            this.charPanel.add(zone);
+        };
+        createCharZone(220, 490, 190, 60, 0); // Alpha
+        createCharZone(500, 490, 200, 60, 1); // Phantom
+        createCharZone(780, 490, 200, 60, 2); // Titan
 
-        const closeChar = this.add.rectangle(500, 620, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleCharPanel(false));
-        this.charPanel.add([closeChar, this.add.text(500, 620, '返回', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '24px', color: '#ff0000', padding: { top: 5, bottom: 5 } }).setOrigin(0.5)]);
+        // 👇 3. 建立底部「返回」按鈕的透明點擊感應區
+        let zoneBack = this.add.zone(500, 680, 250, 60).setInteractive({ useHandCursor: true });
+        zoneBack.on('pointerdown', () => this.toggleCharPanel(false));
+        this.charPanel.add(zoneBack);
+
+        // 👇 4. 重新定位星核過載的 Checkbox 座標
+        this.overloadConfig = { frenzy: false, hardened: false, fragile: false };
+        const createOvBtn = (x, y, key, label, color) => {
+            let btn = this.add.rectangle(x, y, 20, 20, 0x333333).setStrokeStyle(2, color).setInteractive({ useHandCursor: true });
+            let txt = this.add.text(x + 15, y, label, {
+                fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
+                fontSize: '18px',
+                color: '#ccc',
+                padding: { top: 5, bottom: 5 }
+            }).setOrigin(0, 0.5);
+            btn.on('pointerdown', () => {
+                this.overloadConfig[key] = !this.overloadConfig[key];
+                btn.setFillStyle(this.overloadConfig[key] ? color : 0x333333);
+            });
+            this.charPanel.add([btn, txt]);
+        };
+        // 建議 Y 座標統一設為：590 (放在返回按鈕上方的空白處)
+        createOvBtn(330, 590, 'frenzy', '       異種狂暴', 0xffaa00);
+        createOvBtn(510, 590, 'hardened', '       裝甲硬化', 0x55aaff);
+        createOvBtn(690, 590, 'fragile', '       特工脆化', 0xff55ff);
 
         // === 開發者測試 - 實體觀測面板 (三王版本) ===
         this.godModePanel = this.add.container(0, 0).setVisible(false).setDepth(2500);
@@ -319,7 +311,7 @@ class MainMenuScene extends Phaser.Scene {
         const closeGod = this.add.rectangle(500, 510, 200, 45, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleGodMode(false));
         this.godModePanel.add([closeGod, this.add.text(500, 510, '返回', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '22px', color: '#ff0000', padding: { top: 5, bottom: 5 } }).setOrigin(0.5)]);
 
-        this.updateCharUI();
+        // this.updateCharUI(); // 舊 UI 已移除，暫時註解避免錯誤
     }
 
     createInvisibleBtn(x, y, w, h, cb) {
@@ -501,7 +493,7 @@ class MainMenuScene extends Phaser.Scene {
         // 技能太多，改為兩欄，每欄 10 個
         pool.forEach((sk, i) => {
             const isKnown = bData.mutations.includes(sk);
-            const col = i >= 10 ? 100 : -140;
+            const col = i >= 10 ? 100 : -100;
             const row = (i % 10) * 25;
             this.mutationList.add(this.add.text(col, 20 + row, `▶ ${isKnown ? sk : '???'}`, { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '16px', color: isKnown ? '#ff3333' : '#555555', padding: { top: 2, bottom: 2 } }).setOrigin(0, 0));
         });
@@ -516,6 +508,14 @@ class MainGameScene extends Phaser.Scene {
         this.isTestMode = (data && data.isTestMode) ? data.isTestMode : false;
         this.charId = (data && data.char) ? data.char : 'alpha';
         this.testBoss = (data && data.testBoss) ? data.testBoss : 0;
+        this.overload = data.overload || { frenzy: false, hardened: false, fragile: false };
+
+        this.rewardMultiplier = 1.0;
+        if (this.overload.frenzy) this.rewardMultiplier += 0.3;
+        if (this.overload.hardened) this.rewardMultiplier += 0.5;
+        if (this.overload.fragile) this.rewardMultiplier += 1.0;
+
+        this.score = 0;
 
         // 開發者模式：不會因為是測王而降火控，一律滿級
         let bonus = this.isTestMode ? 20 : 0;
@@ -548,6 +548,9 @@ class MainGameScene extends Phaser.Scene {
             this.speedMod = 1.25;
             this.maxHP -= 20;
             this.skills.emp = Math.max(1, this.skills.emp);
+
+            // 👇 修正：疊加 1 級射速，且正確使用 attackSpeed 變數
+            this.skills.attackSpeed += 1;
         } else if (this.charId === 'titan') {
             this.speedMod = 0.85;
             this.maxHP += 50;
@@ -646,6 +649,22 @@ class MainGameScene extends Phaser.Scene {
     }
 
     create() {
+        // 👇 1. 動態生成 600x600 的柔和漸層黑洞貼圖
+        let maskSize = 600;
+        let canvas = document.createElement('canvas');
+        canvas.width = maskSize;
+        canvas.height = maskSize;
+        let ctx = canvas.getContext('2d');
+        // 設定放射狀漸層 (中心點X, 中心點Y, 內圓半徑, 中心點X, 中心點Y, 外圓半徑)
+        let grd = ctx.createRadialGradient(maskSize / 2, maskSize / 2, 50, maskSize / 2, maskSize / 2, maskSize / 2);
+        grd.addColorStop(0, 'rgba(0,0,0,0)');       // 核心 50px 完全透明 (看清特工)
+        grd.addColorStop(0.4, 'rgba(0,0,0,0.5)');   // 中段開始佈滿陰影
+        grd.addColorStop(0.8, 'rgba(0,0,0,0.95)');  // 邊緣幾乎全黑
+        grd.addColorStop(1, 'rgba(0,0,0,1)');       // 最外圍死黑
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, maskSize, maskSize);
+        this.textures.addCanvas('visionHole', canvas);
+
         this.physics.world.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
         this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
         this.cameras.main.setBackgroundColor('#050510');
@@ -705,7 +724,26 @@ class MainGameScene extends Phaser.Scene {
 
         this.laserGfx = this.add.graphics().setDepth(1000).setBlendMode(Phaser.BlendModes.ADD);
         this.bossGfx = this.add.graphics().setDepth(2001);
-        this.blackoutGfx = this.add.graphics().setDepth(4000).setScrollFactor(0).setVisible(false);
+
+        // 👇 2. 建立黑暗結界容器 (取代原本的 blackoutGfx)
+        // 深度設在 4000 左右，確保蓋住怪物與彈幕，但在 UI (5000+) 之下
+        this.blackoutContainer = this.add.container(0, 0).setDepth(4000).setVisible(false);
+
+        // 中心漸層洞
+        let centerHole = this.add.image(0, 0, 'visionHole');
+
+        // 四周無限延伸的死黑區塊 (8000x8000 絕對夠覆蓋任何地圖)
+        let extSize = 8000;
+        let maskRectSize = 600; // Match maskSize
+        let offset = maskRectSize / 2 - 2; // 減 2 是為了避免拼接處產生 1px 的透明縫隙
+
+        let topRect = this.add.rectangle(0, -extSize / 2 - offset, extSize, extSize, 0x000000);
+        let bottomRect = this.add.rectangle(0, extSize / 2 + offset, extSize, extSize, 0x000000);
+        let leftRect = this.add.rectangle(-extSize / 2 - offset, 0, extSize, maskRectSize, 0x000000);
+        let rightRect = this.add.rectangle(extSize / 2 + offset, 0, extSize, maskRectSize, 0x000000);
+
+        this.blackoutContainer.add([centerHole, topRect, bottomRect, leftRect, rightRect]);
+
         this.sparkEmitter = this.add.particles(0, 0, 'laserSpark', { speed: { min: 200, max: 400 }, scale: { start: 1.5, end: 0 }, lifespan: 600, emitting: false });
 
         this.spawnEvent = this.time.addEvent({ delay: 1500, callback: this.spawnAlien, callbackScope: this, loop: true });
@@ -1032,7 +1070,9 @@ class MainGameScene extends Phaser.Scene {
     handleSurvivalTime(delta) {
         this.survivalMS += delta;
         if (this.survivalMS >= 1000) {
-            this.survivalSeconds += Math.floor(this.survivalMS / 1000);
+            let addSecs = Math.floor(this.survivalMS / 1000);
+            this.survivalSeconds += addSecs;
+            this.score += (addSecs * this.rewardMultiplier);
             this.survivalMS %= 1000;
             this.updateHUD();
 
@@ -1233,12 +1273,13 @@ class MainGameScene extends Phaser.Scene {
     }
 
     renderBlackout() {
+        // 👇 3. 視野剝奪發動時，讓結界現形並死死跟著特工
         if (this.blackoutActive) {
-            this.blackoutGfx.setVisible(true).clear();
-            this.blackoutGfx.lineStyle(3000, 0x000000, 0.96);
-            this.blackoutGfx.strokeCircle(this.player.x - this.cameras.main.scrollX, this.player.y - this.cameras.main.scrollY, 150 + 1500);
+            this.blackoutContainer.setVisible(true);
+            this.blackoutContainer.setPosition(this.player.x, this.player.y);
         } else {
-            this.blackoutGfx.setVisible(false);
+            // 如果你有使用 container，記得沒發動時要隱藏
+            if (this.blackoutContainer) this.blackoutContainer.setVisible(false);
         }
     }
 
@@ -1646,6 +1687,8 @@ class MainGameScene extends Phaser.Scene {
                 if (!this.isTestMode && !this.bestiary.monsters.includes('boss')) { this.bestiary.monsters.push('boss'); saveBestiary(this.bestiary); }
             }
 
+            if (this.overload.hardened) this.boss.hp = Math.floor(this.boss.hp * 1.5);
+
             this.maxBossHP = this.boss.hp;
             this.bossHP = this.boss.hp;
             this.boss.phaseMarks = [0.8, 0.5, 0.2];
@@ -1692,19 +1735,14 @@ class MainGameScene extends Phaser.Scene {
         // 👇 2. 副寶箱 (掉落裝備用)：大幅縮小，放在主寶箱的右下角，營造層次感
         this.gearGroup.create(this.boss.x + 45, this.boss.y + 15, 'superChest').setScale(0.35).setTint(0xdd88ff);
 
-        // 👇 3. 金幣：修復「一整排」的精靈圖 Bug，只裁切顯示第一枚金幣
-        let coinDrop = this.itemGroup.create(this.boss.x, this.boss.y + 60, 'coin');
-
-        // 確保圖片載入完成後進行裁切 (寬度除以 6，因為這張圖有 6 個硬幣影格)
-        if (coinDrop.width > 0) {
-            coinDrop.setCrop(0, 0, coinDrop.width / 6, coinDrop.height);
-        } else {
-            coinDrop.once('textureloaded', () => {
-                coinDrop.setCrop(0, 0, coinDrop.width / 6, coinDrop.height);
-            });
+        // 👇 3. 金幣：根據過載倍率掉落多枚星幣
+        let coinCount = Math.floor(1 * this.rewardMultiplier);
+        for (let i = 0; i < coinCount; i++) {
+            let coinDrop = this.itemGroup.create(this.boss.x + (i * 10), this.boss.y + 60, 'coin');
+            if (coinDrop.width > 0) coinDrop.setCrop(0, 0, coinDrop.width / 6, coinDrop.height);
+            else coinDrop.once('textureloaded', () => coinDrop.setCrop(0, 0, coinDrop.width / 6, coinDrop.height));
+            coinDrop.setScale(1.2);
         }
-
-        coinDrop.setScale(1.2);
 
         this.boss.destroy();
     }
@@ -1870,7 +1908,11 @@ class MainGameScene extends Phaser.Scene {
         else if (r < 0.15) { this.itemGroup.create(s.x, s.y, 'item_shield').setData('type', 'shield'); itemName = '【無敵護盾】'; itemColor = '#00ffff'; }
         else if (r < 0.25) { this.itemGroup.create(s.x, s.y, 'item_magnet').setData('type', 'magnet'); itemName = '【強力磁鐵】'; itemColor = '#ffff00'; }
         else if (r < 0.75) { this.itemGroup.create(s.x, s.y, 'medkit'); itemName = '【裝甲修復】'; itemColor = '#00ff00'; }
-        else { this.itemGroup.create(s.x, s.y, 'coin'); itemName = '【星幣】'; itemColor = '#ffaa00'; }
+        else {
+            let coinCount = Math.floor(1 * this.rewardMultiplier);
+            for (let i = 0; i < coinCount; i++) this.itemGroup.create(s.x + (i * 10), s.y, 'coin');
+            itemName = '【星幣】'; itemColor = '#ffaa00';
+        }
 
         // 👇 生成往上飄移消失的全息文字
         let txt = this.add.text(s.x, s.y - 30, itemName, { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '22px', color: itemColor, fontStyle: 'bold', stroke: '#000', strokeThickness: 4, padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setDepth(200);
@@ -2135,7 +2177,7 @@ class MainGameScene extends Phaser.Scene {
     }
 
     triggerEMP() {
-        this.cameras.main.flash(200, 0, 255, 255, true);
+        // this.cameras.main.flash(200, 0, 255, 255, true);
         // ❌ 已經移除誤導人的鏡頭震動 (shake)
 
         // 👇 縮小 EMP 範圍：基礎 120，每級增加 20
@@ -2143,7 +2185,7 @@ class MainGameScene extends Phaser.Scene {
 
         // 👇 替換為「絕對鎖定特工中心」的寫法，解決縮放飄移 Bug
         let empGfx = this.add.graphics({ x: this.player.x, y: this.player.y }).setDepth(15);
-        empGfx.lineStyle(4, 0x00ffff, 0.8);
+        empGfx.lineStyle(4, 0xe0b100, 0.8);
         empGfx.strokeCircle(0, 0, range); // 在自身的 0,0 畫圓
         this.tweens.add({
             targets: empGfx,
@@ -2266,7 +2308,9 @@ class MainGameScene extends Phaser.Scene {
 
     takeDmg(amt) {
         if (this.isGameOver || this.player.isInvulnerable || this.isUltInvincible || this.testBoss > 0) return;
-        this.currentHP -= amt;
+        let dmg = amt;
+        if (this.overload.fragile) dmg *= 2;
+        this.currentHP -= dmg;
         this.updateHUD();
 
         this.player.isInvulnerable = true;
@@ -2326,7 +2370,14 @@ class MainGameScene extends Phaser.Scene {
             saveBestiary(this.bestiary);
         }
 
-        a.hp = 1 + Math.floor(this.survivalSeconds / 60) * (type === 'armored' ? 4 : 1); a.maxHP = a.hp;
+        let baseHp = 1 + Math.floor(this.survivalSeconds / 60) * (type === 'armored' ? 4 : 1);
+        let spdMod = 1.0;
+        if (this.overload.hardened) baseHp = Math.floor(baseHp * 1.5);
+        if (this.overload.frenzy) spdMod = 1.3;
+
+        a.hp = baseHp;
+        a.maxHP = baseHp;
+        a.baseSpeed = (type === 'ghost' ? 90 : (type === 'striker_ship' ? 180 : 120)) * spdMod;
         if (Math.random() < 0.1) {
             a.isMutant = true; a.setScale(1.2);
             let aff = Phaser.Math.Between(0, 6);
