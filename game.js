@@ -86,11 +86,31 @@ class BootScene extends Phaser.Scene {
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xff00ff).fillCircle(5, 5, 5).fillStyle(0xffffff).fillCircle(5, 5, 2).generateTexture('novaBullet', 10, 10);
         // 載入史詩級 Boss 寶箱圖片
         this.load.image('superChest', './assets/super_chest.png');
-        // 繪製高亮度【黃金能量水晶】 (外層橘金光暈 -> 中層耀眼黃 -> 內層純白核心)
+        // 👇 替換為全新設計的【霓虹粉紫菱形水晶 (EXP Gem)】：
         const fragGfx = this.make.graphics({ x: 0, y: 0, add: false });
-        fragGfx.fillStyle(0xffaa00, 0.4).fillCircle(10, 10, 10); // 橘金色的外圍擴散光暈
-        fragGfx.fillStyle(0xffff00, 0.8).fillCircle(10, 10, 6);  // 極度明亮的純黃色中層
-        fragGfx.fillStyle(0xffffff, 1.0).fillCircle(10, 10, 3);  // 純白色的能量核心
+        
+        // 1. 外層：霓虹粉紫色的菱形光暈，極度顯眼
+        fragGfx.fillStyle(0xff00ff, 0.4); 
+        fragGfx.beginPath();
+        fragGfx.moveTo(10, 0); fragGfx.lineTo(20, 10); fragGfx.lineTo(10, 20); fragGfx.lineTo(0, 10);
+        fragGfx.closePath();
+        fragGfx.fillPath();
+
+        // 2. 中層：高亮螢光粉的實體水晶
+        fragGfx.fillStyle(0xff66ff, 0.9);
+        fragGfx.beginPath();
+        fragGfx.moveTo(10, 3); fragGfx.lineTo(17, 10); fragGfx.lineTo(10, 17); fragGfx.lineTo(3, 10);
+        fragGfx.closePath();
+        fragGfx.fillPath();
+
+        // 3. 內層：純白色的閃耀星芒核心
+        fragGfx.fillStyle(0xffffff, 1.0);
+        fragGfx.beginPath();
+        fragGfx.moveTo(10, 6); fragGfx.lineTo(14, 10); fragGfx.lineTo(10, 14); fragGfx.lineTo(6, 10);
+        fragGfx.closePath();
+        fragGfx.fillPath();
+
+        // 生成全新的經驗值貼圖
         fragGfx.generateTexture('fragment', 20, 20);
         // 載入全新設計的空投艙圖片與毒霧圖片
         this.load.image('supplyBox', './assets/supply_box.png');
@@ -164,7 +184,14 @@ class MainMenuScene extends Phaser.Scene {
         this.bestiaryPanel = this.add.container(0, 0).setVisible(false).setDepth(3000);
         const bestiaryBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.95).setInteractive();
         this.bestiaryPanel.add([bestiaryBg, this.add.rectangle(500, 400, 800, 600, 0x111122).setStrokeStyle(4, 0x00ffaa)]);
-        this.bestiaryPanel.add(this.add.text(500, 150, '星核檔案室 - 異種資料庫', { fontSize: '42px', color: '#00ffaa', fontStyle: 'bold' }).setOrigin(0.5));
+        // 👇 加入 fontFamily 與 padding 防止剃頭
+        this.bestiaryPanel.add(this.add.text(500, 150, '星核檔案室 - 異種資料庫', { 
+            fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
+            fontSize: '42px', 
+            color: '#00ffaa', 
+            fontStyle: 'bold',
+            padding: { top: 10, bottom: 10 } 
+        }).setOrigin(0.5));
 
         this.monsterList = this.add.container(300, 240);
         // === 軍械庫 (Shop) 面板華麗重構 ===
@@ -238,7 +265,14 @@ class MainMenuScene extends Phaser.Scene {
         this.bestiaryPanel.add([this.monsterList, this.mutationList]);
 
         const closeBestiary = this.add.rectangle(500, 650, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleBestiary(false));
-        this.bestiaryPanel.add([closeBestiary, this.add.text(500, 650, '關閉圖鑑', { fontSize: '24px', color: '#ff0000' }).setOrigin(0.5)]);
+        // 👇 加入 fontFamily 與 padding 防止剃頭，順便加粗讓按鈕更好看
+        this.bestiaryPanel.add([closeBestiary, this.add.text(500, 650, '關閉圖鑑', { 
+            fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
+            fontSize: '24px', 
+            color: '#ff0000',
+            fontStyle: 'bold',
+            padding: { top: 5, bottom: 5 }
+        }).setOrigin(0.5)]);
 
         this.charPanel = this.add.container(0, 0).setVisible(false).setDepth(2000);
         const charBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.9).setInteractive();
@@ -930,8 +964,18 @@ class MainGameScene extends Phaser.Scene {
         this.bossHud.add([this.bossBarFront, this.bossNameUiTxt]);
 
         this.pauseOverlay = this.add.rectangle(500, 400, 1000, 800, 0, 0.8).setScrollFactor(0).setDepth(9500).setVisible(false).setInteractive();
-        this.quitBtn = this.add.rectangle(500, 500, 320, 70, 0x333333).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(9501).setVisible(false).setStrokeStyle(2, 0x00ffff);
-        this.quitTxt = this.add.text(500, 500, '返回主選單', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '28px', color: '#00ffff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9502).setVisible(false);
+        
+        // 👇 1. 新增「返回遊戲」按鈕 (放在畫面上方 Y: 420)
+        this.resumeBtn = this.add.rectangle(500, 420, 320, 70, 0x333333).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(9501).setVisible(false).setStrokeStyle(2, 0x00ffff);
+        this.resumeTxt = this.add.text(500, 420, '返回遊戲', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '28px', color: '#00ffff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9502).setVisible(false);
+        
+        // 綁定點擊事件：呼叫 togglePause 解除暫停
+        this.resumeBtn.on('pointerdown', () => this.togglePause());
+
+        // 👇 2. 調整原本的「返回主選單」按鈕 (往下移到 Y: 530，並改為紅色調防誤觸)
+        this.quitBtn = this.add.rectangle(500, 530, 320, 70, 0x333333).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(9501).setVisible(false).setStrokeStyle(2, 0xff5555);
+        this.quitTxt = this.add.text(500, 530, '返回主選單', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '28px', color: '#ff5555', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9502).setVisible(false);
+        
         this.quitBtn.on('pointerdown', () => {
             this.sound.stopAll();
             if (!this.isTestMode) {
@@ -2385,7 +2429,19 @@ class MainGameScene extends Phaser.Scene {
         }
     }
 
-    togglePause() { this.isPaused = !this.isPaused; const v = this.isPaused; this.isPaused ? this.physics.pause() : this.physics.resume(); this.pauseOverlay.setVisible(v); this.quitBtn.setVisible(v); this.quitTxt.setVisible(v); }
+    togglePause() { 
+        this.isPaused = !this.isPaused; 
+        const v = this.isPaused; 
+        this.isPaused ? this.physics.pause() : this.physics.resume(); 
+        
+        this.pauseOverlay.setVisible(v); 
+        this.quitBtn.setVisible(v); 
+        this.quitTxt.setVisible(v); 
+        
+        // 👇 追加控制這兩個新元素的顯示狀態
+        this.resumeBtn.setVisible(v);
+        this.resumeTxt.setVisible(v);
+    }
 }
 
 const config = {
