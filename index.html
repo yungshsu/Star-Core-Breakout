@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>未來特工：星核突圍</title>
     <style>
-        /* 徹底簡化 CSS，讓 Phaser 完全接管渲染位置 */
-        html, body {
+        /* 讓 Phaser 完全接管渲染位置，並在手機端完美置中 */
+        html,
+        body {
             margin: 0;
             padding: 0;
             width: 100%;
@@ -14,16 +17,23 @@
             background-color: #0a0a1a;
             overflow: hidden;
             touch-action: none;
+            /* 防止手機瀏覽器下滑整理頁面 */
         }
+
         #game-container {
             width: 100%;
             height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
 </head>
+
 <body>
     <div id="game-container"></div>
     <script src="game.js"></script>
 </body>
+
 </html>

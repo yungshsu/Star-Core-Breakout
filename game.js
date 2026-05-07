@@ -169,6 +169,28 @@ class MainMenuScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(1, 1);
 
+        // 👇 新增這段：行動裝置專用全螢幕按鈕 (放置於左上角)
+        const fsBtn = this.add.rectangle(60, 60, 60, 60, 0x111122).setInteractive({ useHandCursor: true }).setStrokeStyle(2, 0x00ffff);
+        const fsIcon = this.add.text(60, 60, '⛶', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
+        
+        fsBtn.on('pointerover', () => fsBtn.setFillStyle(0x333355));
+        fsBtn.on('pointerout', () => fsBtn.setFillStyle(0x111122));
+        fsBtn.on('pointerdown', () => {
+            if (this.scale.isFullscreen) {
+                this.scale.stopFullscreen();
+            } else {
+                // 1. 請求進入全螢幕
+                this.scale.startFullscreen();
+                // 2. 進入全螢幕後，嘗試強制鎖定為橫向 (Android 裝置通常支援)
+                try {
+                    if (screen.orientation && screen.orientation.lock) {
+                        screen.orientation.lock('landscape').catch(e => console.log('Orientation lock bypassed', e));
+                    }
+                } catch (e) {}
+            }
+        });
+        // 👆 新增結束
+
         // === 面板初始化 ===
         this.gearPanel = this.add.container(0, 0).setVisible(false).setDepth(4000);
         const gearBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.95).setInteractive();
