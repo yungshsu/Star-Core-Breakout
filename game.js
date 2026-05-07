@@ -144,10 +144,12 @@ class MainMenuScene extends Phaser.Scene {
         const data = loadGameData();
 
         // 1. 全螢幕專業封面圖背景
-        this.add.image(500, 400, 'menu_bg').setDisplaySize(1000, 800);
+        // 👇 拿掉寫死的 1000x800 大小，並綁定為 this.mainBg
+        this.bgTiles = this.add.tileSprite(500, 400, 4000, 4000, 'space_bg').setDepth(-1);
+        this.mainBg = this.add.image(500, 400, 'menu_bg');
 
         // 2. 星幣完美對位覆蓋：精確覆蓋原圖的數字「7」
-        this.coinText = this.add.text(915, 320, `${data.coins}`, {
+        this.coinText = this.add.text(923, 320, `${data.coins}`, {
             fontSize: '24px',
             color: '#ffffcc',
             fontStyle: 'bold',
@@ -156,40 +158,29 @@ class MainMenuScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // 3. 隱形熱區按鈕對位
-        this.createInvisibleBtn(810, 398, 280, 60, () => this.toggleCharPanel(true));  // 開始任務
-        this.createInvisibleBtn(810, 475, 280, 60, () => this.toggleShop(true));       // 軍械庫強化
-        this.createInvisibleBtn(810, 550, 280, 60, () => this.toggleGearPanel(true));  // 裝甲整備庫
-        this.createInvisibleBtn(810, 625, 280, 60, () => this.toggleBestiary(true));   // 星核檔案室
-        this.createInvisibleBtn(810, 700, 280, 60, () => this.toggleGodMode(true));    // 開發者測試 -> 實體觀測模式
+        this.createInvisibleBtn(815, 398, 280, 60, () => this.toggleCharPanel(true));  // 開始任務
+        this.createInvisibleBtn(815, 475, 280, 60, () => this.toggleShop(true));       // 軍械庫強化
+        this.createInvisibleBtn(815, 550, 280, 60, () => this.toggleGearPanel(true));  // 裝甲整備庫
+        this.createInvisibleBtn(815, 625, 280, 60, () => this.toggleBestiary(true));   // 星核檔案室
+        this.createInvisibleBtn(815, 700, 280, 60, () => this.toggleGodMode(true));    // 開發者測試 -> 實體觀測模式
 
-        // 4. 加入版本號與製作人簽名
-        this.add.text(980, 780, 'v2.0 | Producer: Yungs.hsu', {
-            fontSize: '16px',
-            color: '#8888aa',
-            fontStyle: 'bold'
+        // 👇 1. 將版本號與全螢幕按鈕綁定到 this 變數上，方便後續移動
+        this.versionTxt = this.add.text(980, 780, 'v2.0 | Producer: Yungs.hsu', {
+            fontSize: '16px', color: '#8888aa', fontStyle: 'bold'
         }).setOrigin(1, 1);
 
-        // 👇 新增這段：行動裝置專用全螢幕按鈕 (放置於左上角)
-        const fsBtn = this.add.rectangle(60, 60, 60, 60, 0x111122).setInteractive({ useHandCursor: true }).setStrokeStyle(2, 0x00ffff);
-        const fsIcon = this.add.text(60, 60, '⛶', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
-        
-        fsBtn.on('pointerover', () => fsBtn.setFillStyle(0x333355));
-        fsBtn.on('pointerout', () => fsBtn.setFillStyle(0x111122));
-        fsBtn.on('pointerdown', () => {
-            if (this.scale.isFullscreen) {
-                this.scale.stopFullscreen();
-            } else {
-                // 1. 請求進入全螢幕
+        this.fsBtn = this.add.rectangle(60, 60, 60, 60, 0x111122).setInteractive({ useHandCursor: true }).setStrokeStyle(2, 0x00ffff);
+        this.fsIcon = this.add.text(60, 60, '⛶', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
+
+        this.fsBtn.on('pointerover', () => this.fsBtn.setFillStyle(0x333355));
+        this.fsBtn.on('pointerout', () => this.fsBtn.setFillStyle(0x111122));
+        this.fsBtn.on('pointerdown', () => {
+            if (this.scale.isFullscreen) this.scale.stopFullscreen();
+            else {
                 this.scale.startFullscreen();
-                // 2. 進入全螢幕後，嘗試強制鎖定為橫向 (Android 裝置通常支援)
-                try {
-                    if (screen.orientation && screen.orientation.lock) {
-                        screen.orientation.lock('landscape').catch(e => console.log('Orientation lock bypassed', e));
-                    }
-                } catch (e) {}
+                try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(e => { }); } catch (e) { }
             }
         });
-        // 👆 新增結束
 
         // === 面板初始化 ===
         this.gearPanel = this.add.container(0, 0).setVisible(false).setDepth(4000);
@@ -380,6 +371,47 @@ class MainMenuScene extends Phaser.Scene {
         this.godModePanel.add([closeGod, this.add.text(500, 510, '返回', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '22px', color: '#ff0000', padding: { top: 5, bottom: 5 } }).setOrigin(0.5)]);
 
         // this.updateCharUI(); // 舊 UI 已移除，暫時註解避免錯誤
+
+        // 👇 2. 監聽螢幕變動
+        this.scale.on('resize', this.resizeMenu, this);
+        this.resizeMenu(this.scale.gameSize);
+    }
+
+    // 👇 3. 新增主選單排版函式
+    resizeMenu(gameSize) {
+        const { width, height } = gameSize;
+        this.cameras.main.setViewport(0, 0, width, height);
+
+        // 👇 【核心修復】利用攝影機 Zoom 來整體縮小主畫面，保證所有隱形按鈕與座標絕對不會偏移！
+        // 如果螢幕寬度小於 1000 (例如我們剛設定的 750)，就縮小 75% 確保畫面完整塞入
+        let zoomLevel = Math.min(1, width / 1000);
+        this.cameras.main.setZoom(zoomLevel);
+        this.cameras.main.centerOn(500, 400);
+
+        // 嚴格禁止背景圖變形，維持原本完美的 1000x800 比例
+        if (this.mainBg) this.mainBg.setScale(1);
+
+        // 將所有半透明 UI 黑底遮罩撐到極大，避免直式螢幕上下穿幫
+        [this.gearPanel, this.actionPopup, this.bestiaryPanel, this.shopPanel, this.charPanel, this.godModePanel].forEach(panel => {
+            if (panel && panel.list[0]) panel.list[0].setSize(4000, 4000);
+        });
+
+        // 釘選邊緣按鈕 (必須考慮 Zoom 之後的真實可視範圍)
+        let visibleWidth = width / zoomLevel;
+        let visibleHeight = height / zoomLevel;
+
+        let leftX = 500 - visibleWidth / 2;
+        let topY = 400 - visibleHeight / 2;
+        let rightX = 500 + visibleWidth / 2;
+        let bottomY = 400 + visibleHeight / 2;
+
+        if (this.fsBtn) {
+            this.fsBtn.setPosition(leftX + 60, topY + 60);
+            this.fsIcon.setPosition(leftX + 60, topY + 60);
+        }
+        if (this.versionTxt) {
+            this.versionTxt.setPosition(rightX - 20, bottomY - 20);
+        }
     }
 
     createInvisibleBtn(x, y, w, h, cb) {
@@ -617,14 +649,14 @@ class MainGameScene extends Phaser.Scene {
             // 核心特工 (Alpha)：清怪特化，射速 +1，自帶 1 級分裂彈頭
             this.skills.attackSpeed += 1;
             this.skills.split += 1;
-        } 
+        }
         else if (this.charId === 'phantom') {
             // 幻影 (Phantom)：高機動刺客，移速快、血量少、自帶 EMP
             this.speedMod = 1.25;
             this.maxHP -= 20;
             this.skills.emp = Math.max(1, this.skills.emp);
             this.skills.attackSpeed += 1; // 確保幻影的射速加成還在
-        } 
+        }
         else if (this.charId === 'titan') {
             // 泰坦 (Titan)：重裝坦克，移速慢、血量高、威力大、自帶護盾
             this.speedMod = 0.85;
@@ -746,7 +778,10 @@ class MainGameScene extends Phaser.Scene {
         this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
         this.cameras.main.setBackgroundColor('#050510');
 
-        this.starBackground = this.add.tileSprite(WORLD_SIZE / 2, WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE, 'space_bg').setDepth(0);
+        this.starBackground = this.add.tileSprite(0, 0, WORLD_SIZE, WORLD_SIZE, 'space_bg')
+            .setOrigin(0.5)
+            .setDepth(0)
+            .setScrollFactor(0);
 
         this.player = this.physics.add.sprite(WORLD_SIZE / 2, WORLD_SIZE / 2, `mech_${this.charId}_down`).setScale(0.75).setCollideWorldBounds(true).setDrag(2500).setMaxVelocity(260 * this.speedMod).setDepth(10);
 
@@ -887,7 +922,7 @@ class MainGameScene extends Phaser.Scene {
 
         this.input.on('pointerdown', (pointer) => {
             if (this.isPaused || this.isGameOver) return; // 👈 增加判斷，防止結算時觸發搖桿
-            if (pointer.x < canvasWidth / 2 && !this.joyPointer) {
+            if (pointer.x < this.scale.width / 2 && !this.joyPointer) {
                 this.joyPointer = pointer;
                 this.joyBase.setPosition(pointer.x, pointer.y).setVisible(true);
                 this.joyThumb.setPosition(pointer.x, pointer.y).setVisible(true);
@@ -931,48 +966,10 @@ class MainGameScene extends Phaser.Scene {
         // ==========================================
         this.setupUI();
 
-        // --- 暫停按鈕 ---
-        this.add.circle(80, 730, 45, 0x555555, 0.6).setScrollFactor(0).setDepth(9000).setInteractive().on('pointerdown', () => this.togglePause());
-        this.add.text(80, 730, '暫停', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '20px', color: '#fff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-
-        // --- DASH (衝刺) 按鈕 ---
-        this.mobileDashBtn = this.add.circle(800, 730, 45, 0x00aaff, 0.6).setScrollFactor(0).setDepth(9000).setInteractive();
-        this.add.text(800, 705, '[ Q ]', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#ffff00', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-        this.add.text(800, 725, '衝刺', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#fff', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-        this.dashTxt = this.add.text(800, 748, '就緒', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#fff', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-        this.mobileDashBtn.on('pointerdown', () => this.triggerDash(this.time.now));
-
-        // --- ULT (終極) 按鈕 ---
-        this.mobileUltBtn = this.add.circle(920, 730, 45, 0xffaa00, 0.6).setScrollFactor(0).setDepth(9000).setInteractive();
-        this.add.text(920, 705, '[ E ]', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#ffff00', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-        this.add.text(920, 725, '終極', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#fff', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-        this.ultCooldownTxt = this.add.text(920, 748, '就緒', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#fff', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
-        this.mobileUltBtn.on('pointerdown', () => this.triggerUltimate(this.time.now));
-
         try {
             this.bgMusic = this.sound.add('bgm', { loop: true, volume: 0.3 });
             this.bgMusic.play();
         } catch (e) { console.log('BGM Error', e); }
-
-        // --- Boss HUD (血條與警告文字：中心化修復版本) ---
-        // 1. 警告文字 (相對於容器中心往上 30)
-        this.bossNameUiTxt = this.add.text(0, -30, '警告：偵測到核心實體', {
-            fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
-            fontSize: '18px',
-            color: '#ff0000',
-            fontStyle: 'bold',
-            padding: { top: 5, bottom: 5 }
-        }).setOrigin(0.5);
-
-        // 2. 血條背景 (位於容器中心 0,0)
-        let bossBarBg = this.add.rectangle(0, 0, 600, 25, 0x330000).setStrokeStyle(2, 0xff0000);
-
-        // 3. 前景紅條 (相對於中心往左 300，使其左端對齊背景左端)
-        this.bossBarFront = this.add.rectangle(-300, 0, 600, 25, 0xff0000).setOrigin(0, 0.5);
-        this.bossBarFront.width = 600; // 強制設定初始寬度
-
-        // 4. 將容器直接放在畫面的中心高度 (500, 150)
-        this.bossHud = this.add.container(500, 150, [bossBarBg, this.bossBarFront, this.bossNameUiTxt]).setScrollFactor(0).setDepth(6000).setVisible(false);
 
         this.events.on('shutdown', () => {
             if (this.bgMusic) this.bgMusic.stop();
@@ -989,7 +986,7 @@ class MainGameScene extends Phaser.Scene {
     }
 
     setupUI() {
-        this.add.rectangle(500, 40, 1000, 80, 0x000000, 0.5).setScrollFactor(0).setDepth(5000);
+        this.topBarBg = this.add.rectangle(500, 40, 1000, 80, 0x000000, 0.5).setScrollFactor(0).setDepth(5000);
         this.statsHud = this.add.text(20, 20, '', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#00ffff', fontStyle: 'bold', lineSpacing: 2, padding: { top: 5, bottom: 5 } }).setScrollFactor(0).setDepth(5001);
         this.timerText = this.add.text(650, 40, '00:00', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '32px', color: '#ffffff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(5001);
 
@@ -1006,18 +1003,19 @@ class MainGameScene extends Phaser.Scene {
         this.hazardOverlay = this.add.rectangle(500, 400, 1000, 800, 0xff0000, 0).setScrollFactor(0).setDepth(3500);
 
         this.coinHud = this.add.text(980, 40, '', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '22px', color: '#ffff00', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(5001);
-        this.add.rectangle(25, 100, 250, 25, 0x000000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5001).setStrokeStyle(2, 0xffffff, 1);
+        this.hpBarBg = this.add.rectangle(25, 100, 250, 25, 0x000000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5001).setStrokeStyle(2, 0xffffff, 1);
         this.hpBarFront = this.add.rectangle(25, 100, 250, 25, 0xff0000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5002);
         this.hpText = this.add.text(150, 100, '', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#ffffff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(5003);
 
         this.xpBar = this.add.graphics().setScrollFactor(0).setDepth(5000);
 
-        // 將 Boss 血條容器整體往上推一點 (Y 從 720 改為 690)
-        this.bossHud = this.add.container(0, 690).setScrollFactor(0).setDepth(6000).setVisible(false);
-        this.bossHud.add(this.add.rectangle(500, 40, 800, 30, 0x550000).setStrokeStyle(2, 0xff0000));
-        this.bossBarFront = this.add.rectangle(100, 40, 800, 30, 0xff0000).setOrigin(0, 0.5);
-        this.bossNameUiTxt = this.add.text(500, 10, '警告：偵測到核心實體', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#ff0000', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5);
-        this.bossHud.add([this.bossBarFront, this.bossNameUiTxt]);
+        // 將 Boss 血條結構中心化
+        this.bossHud = this.add.container(0, 0).setScrollFactor(0).setDepth(6000).setVisible(false);
+        // 先給予預設值 (稍後會在 updateLayout 動態修正)
+        this.bossBarBg = this.add.rectangle(0, 0, 600, 25, 0x550000).setStrokeStyle(2, 0xff0000);
+        this.bossBarFront = this.add.rectangle(-300, 0, 600, 25, 0xff0000).setOrigin(0, 0.5);
+        this.bossNameUiTxt = this.add.text(0, -25, '警告：偵測到核心實體', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#ff0000', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5);
+        this.bossHud.add([this.bossBarBg, this.bossBarFront, this.bossNameUiTxt]);
 
         this.pauseOverlay = this.add.rectangle(500, 400, 1000, 800, 0, 0.8).setScrollFactor(0).setDepth(9500).setVisible(false).setInteractive();
 
@@ -1080,7 +1078,164 @@ class MainGameScene extends Phaser.Scene {
 
         this.bossWarningTxt = this.add.text(500, 250, '', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '48px', color: '#ff0000', fontStyle: 'bold', stroke: '#000', strokeThickness: 6, padding: { top: 10, bottom: 10 } }).setOrigin(0.5).setScrollFactor(0).setDepth(11000).setVisible(false);
 
+        // 👇 從這裡開始貼上：將底部按鈕正式納入 UI 系統
+        // --- 暫停按鈕 ---
+        this.pauseBtn = this.add.circle(80, 730, 45, 0x555555, 0.6).setScrollFactor(0).setDepth(9000).setInteractive().on('pointerdown', () => this.togglePause());
+        this.pauseTxt = this.add.text(80, 730, '暫停', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '20px', color: '#fff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+
+        // --- DASH (衝刺) 按鈕 ---
+        this.mobileDashBtn = this.add.circle(800, 730, 45, 0x00aaff, 0.6).setScrollFactor(0).setDepth(9000).setInteractive();
+        this.dashKeyTxt = this.add.text(800, 705, '[ Q ]', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#ffff00', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        this.dashLabelTxt = this.add.text(800, 725, '衝刺', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#fff', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        this.dashTxt = this.add.text(800, 748, '就緒', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#fff', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        this.mobileDashBtn.on('pointerdown', () => this.triggerDash(this.time.now));
+
+        // --- ULT (終極) 按鈕 ---
+        this.mobileUltBtn = this.add.circle(920, 730, 45, 0xffaa00, 0.6).setScrollFactor(0).setDepth(9000).setInteractive();
+        this.ultKeyTxt = this.add.text(920, 705, '[ E ]', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#ffff00', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        this.ultLabelTxt = this.add.text(920, 725, '終極', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '18px', color: '#fff', fontStyle: 'bold', padding: { top: 2, bottom: 2 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        this.ultCooldownTxt = this.add.text(920, 748, '就緒', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#fff', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9001);
+        this.mobileUltBtn.on('pointerdown', () => this.triggerUltimate(this.time.now));
+        // 👆 貼上到這裡結束
+
         this.updateHUD();
+
+        // 👇 監聽螢幕旋轉與縮放事件
+        this.scale.on('resize', (gameSize) => {
+            const { width, height } = gameSize;
+            this.cameras.main.setViewport(0, 0, width, height);
+            this.updateLayout();
+        });
+
+        // 首次啟動先執行一次排版
+        this.updateLayout();
+    }
+
+    updateLayout() {
+        const { width, height } = this.scale;
+        if (this.cameras.main) this.cameras.main.setViewport(0, 0, width, height);
+
+        if (this.starBackground) {
+            this.starBackground.setSize(width, height);
+            this.starBackground.setPosition(width / 2, height / 2);
+        }
+
+        // 頂部與左上角狀態
+        if (this.topBarBg) { this.topBarBg.setSize(width, 80); this.topBarBg.setPosition(width / 2, 40); }
+        if (this.statsHud) this.statsHud.setPosition(20, 20);
+        if (this.hpBarBg) this.hpBarBg.setPosition(25, 100);
+        if (this.hpBarFront) this.hpBarFront.setPosition(25, 100);
+        if (this.hpText) this.hpText.setPosition(150, 100);
+        if (this.xpBar) {
+            this.xpBar.clear()
+                .fillStyle(0x00ffff, 0.2).fillRect(0, 0, this.scale.width, 8)
+                .fillStyle(0x00ffff, 1).fillRect(0, 0, (this.currentXP / this.targetXP) * this.scale.width, 8);
+        }
+
+        // 右上與正上方
+        if (this.coinHud) this.coinHud.setPosition(width - 20, 40);
+        if (this.timerText) this.timerText.setPosition(width / 2, 40);
+        if (this.hazardTxt) this.hazardTxt.setPosition(width / 2, 80);
+        if (this.hazardOverlay) { this.hazardOverlay.setSize(width, height); this.hazardOverlay.setPosition(width / 2, height / 2); }
+
+        // 👇 【核心修復】明確指定 Boss 血條在 Y: 180，徹底避開上方的時間與左側的玩家血條！
+        if (this.bossHud) {
+            this.bossHud.setPosition(width / 2, 180);
+
+            // 動態調整血條寬度，確保不會超出螢幕邊緣 (保留左右 80px 邊距)
+            let bWidth = Math.min(600, width - 80);
+            this.bossBarMaxWidth = bWidth; // 存下最大寬度，給受傷扣血時使用
+
+            if (this.bossBarBg) this.bossBarBg.setSize(bWidth, 25);
+            if (this.bossBarFront) {
+                this.bossBarFront.x = -bWidth / 2; // 將紅條起點對齊背景左側
+                // 計算當前血量比例
+                let p = (this.bossActive && this.maxBossHP) ? Phaser.Math.Clamp(this.bossHP / this.maxBossHP, 0, 1) : 1;
+                this.bossBarFront.width = p * bWidth;
+            }
+        }
+
+        // Boss 出場大字警告 (維持置中偏上)
+        if (this.bossWarningTxt) this.bossWarningTxt.setPosition(width / 2, height / 2 - 150);
+        // 左下角：暫停
+        if (this.pauseBtn) this.pauseBtn.setPosition(80, height - 70);
+        if (this.pauseTxt) this.pauseTxt.setPosition(80, height - 70);
+
+        // 右下角：衝刺與終極按鈕
+        if (this.mobileUltBtn) {
+            this.mobileUltBtn.setPosition(width - 70, height - 70);
+            if (this.ultKeyTxt) this.ultKeyTxt.setPosition(width - 70, height - 95);
+            if (this.ultLabelTxt) this.ultLabelTxt.setPosition(width - 70, height - 75);
+            if (this.ultCooldownTxt) this.ultCooldownTxt.setPosition(width - 70, height - 52);
+        }
+        if (this.mobileDashBtn) {
+            this.mobileDashBtn.setPosition(width - 180, height - 70);
+            if (this.dashKeyTxt) this.dashKeyTxt.setPosition(width - 180, height - 95);
+            if (this.dashLabelTxt) this.dashLabelTxt.setPosition(width - 180, height - 75);
+            if (this.dashTxt) this.dashTxt.setPosition(width - 180, height - 52);
+        }
+
+        // 👇 將 Boss 血條移至「上方置中」(放在玩家血條下方 Y:160 的位置)
+        if (this.bossHud) {
+            this.bossHud.setPosition(width / 2, 160);
+
+            // 動態調整血條寬度，確保不會超出任何形狀的螢幕邊緣 (保留左右 80px 邊距)
+            let bWidth = Math.min(600, width - 80);
+            this.bossBarMaxWidth = bWidth; // 存下最大寬度，給受傷扣血時使用
+
+            if (this.bossBarBg) this.bossBarBg.setSize(bWidth, 25);
+            if (this.bossBarFront) {
+                this.bossBarFront.x = -bWidth / 2; // 將紅條起點對齊背景左側
+                // 如果正在打王，維持當前血量比例；否則預設填滿
+                let p = (this.bossActive && this.maxBossHP) ? Phaser.Math.Clamp(this.bossHP / this.maxBossHP, 0, 1) : 1;
+                this.bossBarFront.width = p * bWidth;
+            }
+        }
+        if (this.bossWarningTxt) this.bossWarningTxt.setPosition(width / 2, height / 2 - 150);
+        // 全螢幕遮罩 (置中並填滿)
+        const centerOverlays = [this.pauseOverlay, this.goBg, this.upgradeOverlay, this.superOverlay];
+        centerOverlays.forEach(bg => {
+            if (bg) { bg.setSize(width, height); bg.setPosition(width / 2, height / 2); }
+        });
+
+        // 暫停選單按鈕
+        if (this.resumeBtn) this.resumeBtn.setPosition(width / 2, height / 2 - 55);
+        if (this.resumeTxt) this.resumeTxt.setPosition(width / 2, height / 2 - 55);
+        if (this.quitBtn) this.quitBtn.setPosition(width / 2, height / 2 + 55);
+        if (this.quitTxt) this.quitTxt.setPosition(width / 2, height / 2 + 55);
+
+        // 開發者面板與結算面板
+        if (this.godModePanel) this.godModePanel.setPosition(width / 2, height / 2);
+        if (this.goTitle) this.goTitle.setPosition(width / 2, height / 2 - 150);
+        if (this.finalCoinsText) this.finalCoinsText.setPosition(width / 2, height / 2 + 20);
+        if (this.goBtn) this.goBtn.setPosition(width / 2, height / 2 + 150);
+        if (this.goTxt) this.goTxt.setPosition(width / 2, height / 2 + 150);
+
+        // 升級卡牌動態居中 (三張卡片間隔 300)
+        if (this.upgradeCards) {
+            this.upgradeCards.forEach((card, i) => {
+                let cx = width / 2 + (i - 1) * 300;
+                if (card.c) card.c.setPosition(cx, height / 2);
+                if (card.t) card.t.setPosition(cx, height / 2);
+            });
+        }
+        if (this.superCards) {
+            this.superCards.forEach((card, i) => {
+                let cx = width / 2 + (i - 1) * 300;
+                if (card.c) card.c.setPosition(cx, height / 2);
+                if (card.t) card.t.setPosition(cx, height / 2);
+            });
+        }
+
+        // 視野剝奪黑洞
+        if (this.blackoutGfx) {
+            const maxDim = Math.max(width, height);
+            this.blackoutGfx.clear();
+            this.blackoutGfx.fillStyle(0x000000, 1);
+            this.blackoutGfx.fillRect(-maxDim, -maxDim, maxDim * 2, maxDim * 2);
+            this.blackoutGfx.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 1, 1, 0, 0);
+            this.blackoutGfx.fillCircle(0, 0, 250);
+        }
     }
 
     update(time, delta) {
@@ -1372,18 +1527,18 @@ class MainGameScene extends Phaser.Scene {
             let l = this.activeLasers[i];
             let cOuter = 0x0000ff, cInner = 0x00ffff;
 
-            if (l.type === 'nuke') { cOuter = 0xff0000; cInner = 0xffaa00; } 
+            if (l.type === 'nuke') { cOuter = 0xff0000; cInner = 0xffaa00; }
             else if (l.type === 'ice') { cOuter = 0x00aaff; cInner = 0xffffff; }
 
             // 計算雷射的總長度與方向向量
             let dist = Phaser.Math.Distance.Between(l.x1, l.y1, l.x2, l.y2);
             if (dist < 1) continue; // 避免距離過短導致計算錯誤
-            
+
             let dx = (l.x2 - l.x1) / dist;
             let dy = (l.y2 - l.y1) / dist;
 
             // 👇 【尖銳化工程】：將外層粗光暈的頭尾往內縮 (最多縮進 15 像素)
-            let shrinkOuter = Math.min(15, dist / 3); 
+            let shrinkOuter = Math.min(15, dist / 3);
             let ox1 = l.x1 + dx * shrinkOuter, oy1 = l.y1 + dy * shrinkOuter;
             let ox2 = l.x2 - dx * shrinkOuter, oy2 = l.y2 - dy * shrinkOuter;
 
@@ -1395,11 +1550,11 @@ class MainGameScene extends Phaser.Scene {
             // 繪製具有層次感的尖銳光束
             this.laserGfx.lineStyle(18, cOuter, l.alpha * 0.2).lineBetween(ox1, oy1, ox2, oy2);
             this.laserGfx.lineStyle(10, cInner, l.alpha * 0.6).lineBetween(ix1, iy1, ix2, iy2);
-            
+
             // 最細的核心白光維持滿長度，形成像矛一樣的銳利尖端
             this.laserGfx.lineStyle(4, 0xffffff, l.alpha * 1.0).lineBetween(l.x1, l.y1, l.x2, l.y2);
 
-            l.alpha -= 0.08; 
+            l.alpha -= 0.08;
             if (l.alpha <= 0) this.activeLasers.splice(i, 1);
         }
     }
@@ -1447,20 +1602,20 @@ class MainGameScene extends Phaser.Scene {
             for (let i = -1; i <= 1; i++) {
                 // 👇 1. 判斷目前是不是深淵蟲后
                 let isQueen = this.boss.texture.key === 'boss_queen';
-                
+
                 // 根據 Boss 身分決定子彈外觀 (蟲后用新圖，其他 Boss 維持原本的圓球)
                 let bKey = isQueen ? 'queenBaseBullet' : 'novaBullet';
                 let b = this.bulletGroup.create(this.boss.x, this.boss.y, bKey);
-                
+
                 // 只有原本的圓球才需要染成紅色，新圖保留原本漂亮的綠紫漸層
                 if (!isQueen) b.setTint(0xff0000);
-                
+
                 // 如果是新子彈，稍微放大一點增加壓迫感
                 if (isQueen) b.setScale(1.2);
 
                 // 計算射擊角度
                 let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y) + (i * 0.25);
-                
+
                 // 👇 2. 【關鍵】讓子彈旋轉，使拖尾圖案的方向符合飛行軌跡！
                 b.setRotation(ang);
 
@@ -1904,7 +2059,9 @@ class MainGameScene extends Phaser.Scene {
         let p = Phaser.Math.Clamp(this.bossHP / this.maxBossHP, 0, 1);
 
         if (this.bossActive && this.bossBarFront) {
-            this.bossBarFront.width = p * 600;
+            // 👇 讀取我們在 updateLayout 計算好的動態寬度 (this.bossBarMaxWidth)
+            let currentMaxWidth = this.bossBarMaxWidth || 600;
+            this.bossBarFront.width = p * currentMaxWidth;
         }
 
         if (this.boss.phaseMarks.length > 0 && p <= this.boss.phaseMarks[0]) {
@@ -1993,12 +2150,12 @@ class MainGameScene extends Phaser.Scene {
 
                 // 1. 計算目標角度
                 let ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, closest.x, closest.y) + offAng;
-                
+
                 // 👇 2. 【起點偏移】：將發射點往機甲外圍推移 35 像素，模擬從槍管射出
-                let barrelDist = 35; 
+                let barrelDist = 35;
                 let sx = this.player.x + Math.cos(ang) * barrelDist + offX;
                 let sy = this.player.y + Math.sin(ang) * barrelDist + offY;
-                
+
                 // 👇 3. 【終點偏移】：讓雷射打在怪物表皮，而不是穿透到怪物正中心 (退縮 20 像素)
                 let hitDist = Math.max(10, Phaser.Math.Distance.Between(sx, sy, closest.x, closest.y) - 20);
                 let endX = sx + Math.cos(ang) * hitDist;
@@ -2715,24 +2872,41 @@ class MainGameScene extends Phaser.Scene {
     }
 }
 
+// 👇 1. 全新動態解析度引擎：判斷手機方向，給予最完美的視野
+const getDynamicDimensions = () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (w >= h) {
+        // 橫向 (Landscape)：維持高度 800
+        return { width: 800 * (w / h), height: 800 };
+    } else {
+        // 直向 (Portrait)：寬度從 1000 下修至 750 (這會讓特工與敵人的視覺比例放大約 33%)
+        return { width: 750, height: 750 * (h / w) };
+    }
+};
+
+const dims = getDynamicDimensions();
+
+// 👇 2. 替換核心配置
 const config = {
     type: Phaser.AUTO,
     scale: {
         mode: Phaser.Scale.FIT,
         parent: 'game-container',
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: canvasWidth,
-        height: canvasHeight
+        width: dims.width,
+        height: dims.height,
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    backgroundColor: '#0a0a1a',
-    input: { activePointers: 3 },
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 0 },
-            debug: false
-        }
-    },
+    physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
     scene: [BootScene, MainMenuScene, MainGameScene]
 };
+
 const game = new Phaser.Game(config);
+
+// 👇 3. 監聽螢幕旋轉，即時重算長寬
+window.addEventListener('resize', () => {
+    if (game.scale) {
+        const newDims = getDynamicDimensions();
+        game.scale.resize(newDims.width, newDims.height);
+    }
+});
