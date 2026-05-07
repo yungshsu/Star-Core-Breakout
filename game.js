@@ -1341,15 +1341,37 @@ class MainGameScene extends Phaser.Scene {
         this.laserGfx.clear();
         for (let i = this.activeLasers.length - 1; i >= 0; i--) {
             let l = this.activeLasers[i];
-            let cOuter = 0x0000ff, cInner = 0x00ffff; // 預設藍色
+            let cOuter = 0x0000ff, cInner = 0x00ffff;
 
-            if (l.type === 'nuke') { cOuter = 0xff0000; cInner = 0xffaa00; } // 核爆：猩紅橘
-            else if (l.type === 'ice') { cOuter = 0x00aaff; cInner = 0xffffff; } // 冰爆：亮青白
+            if (l.type === 'nuke') { cOuter = 0xff0000; cInner = 0xffaa00; } 
+            else if (l.type === 'ice') { cOuter = 0x00aaff; cInner = 0xffffff; }
 
-            this.laserGfx.lineStyle(18, cOuter, l.alpha * 0.2).lineBetween(l.x1, l.y1, l.x2, l.y2);
-            this.laserGfx.lineStyle(10, cInner, l.alpha * 0.6).lineBetween(l.x1, l.y1, l.x2, l.y2);
+            // 計算雷射的總長度與方向向量
+            let dist = Phaser.Math.Distance.Between(l.x1, l.y1, l.x2, l.y2);
+            if (dist < 1) continue; // 避免距離過短導致計算錯誤
+            
+            let dx = (l.x2 - l.x1) / dist;
+            let dy = (l.y2 - l.y1) / dist;
+
+            // 👇 【尖銳化工程】：將外層粗光暈的頭尾往內縮 (最多縮進 15 像素)
+            let shrinkOuter = Math.min(15, dist / 3); 
+            let ox1 = l.x1 + dx * shrinkOuter, oy1 = l.y1 + dy * shrinkOuter;
+            let ox2 = l.x2 - dx * shrinkOuter, oy2 = l.y2 - dy * shrinkOuter;
+
+            // 將中層光暈的頭尾往內縮 (最多縮進 6 像素)
+            let shrinkInner = Math.min(6, dist / 4);
+            let ix1 = l.x1 + dx * shrinkInner, iy1 = l.y1 + dy * shrinkInner;
+            let ix2 = l.x2 - dx * shrinkInner, iy2 = l.y2 - dy * shrinkInner;
+
+            // 繪製具有層次感的尖銳光束
+            this.laserGfx.lineStyle(18, cOuter, l.alpha * 0.2).lineBetween(ox1, oy1, ox2, oy2);
+            this.laserGfx.lineStyle(10, cInner, l.alpha * 0.6).lineBetween(ix1, iy1, ix2, iy2);
+            
+            // 最細的核心白光維持滿長度，形成像矛一樣的銳利尖端
             this.laserGfx.lineStyle(4, 0xffffff, l.alpha * 1.0).lineBetween(l.x1, l.y1, l.x2, l.y2);
-            l.alpha -= 0.08; if (l.alpha <= 0) this.activeLasers.splice(i, 1);
+
+            l.alpha -= 0.08; 
+            if (l.alpha <= 0) this.activeLasers.splice(i, 1);
         }
     }
 
@@ -1940,9 +1962,18 @@ class MainGameScene extends Phaser.Scene {
                 let isBoss = (this.bossActive && closest === this.boss);
                 if (isBoss) freezeChance = this.awakenings.ice ? 0.5 : (freezeChance * 0.2);
 
+                // 1. 計算目標角度
                 let ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, closest.x, closest.y) + offAng;
-                let sx = this.player.x + offX, sy = this.player.y + offY;
-                let endX = closest.x, endY = closest.y;
+                
+                // 👇 2. 【起點偏移】：將發射點往機甲外圍推移 35 像素，模擬從槍管射出
+                let barrelDist = 35; 
+                let sx = this.player.x + Math.cos(ang) * barrelDist + offX;
+                let sy = this.player.y + Math.sin(ang) * barrelDist + offY;
+                
+                // 👇 3. 【終點偏移】：讓雷射打在怪物表皮，而不是穿透到怪物正中心 (退縮 20 像素)
+                let hitDist = Math.max(10, Phaser.Math.Distance.Between(sx, sy, closest.x, closest.y) - 20);
+                let endX = sx + Math.cos(ang) * hitDist;
+                let endY = sy + Math.sin(ang) * hitDist;
 
                 try { this.sound.play('sfx_shoot', { volume: 0.1 }); } catch (e) { }
 
