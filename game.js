@@ -590,14 +590,21 @@ class MainGameScene extends Phaser.Scene {
         this.speedMod = 1.0;
         this.maxHP = 100 + this.skills.hp * 20;
 
-        if (this.charId === 'phantom') {
+        // 👇 針對三架機甲給予專屬的開局能力加成
+        if (this.charId === 'alpha') {
+            // 核心特工 (Alpha)：清怪特化，射速 +1，自帶 1 級分裂彈頭
+            this.skills.attackSpeed += 1;
+            this.skills.split += 1;
+        } 
+        else if (this.charId === 'phantom') {
+            // 幻影 (Phantom)：高機動刺客，移速快、血量少、自帶 EMP
             this.speedMod = 1.25;
             this.maxHP -= 20;
             this.skills.emp = Math.max(1, this.skills.emp);
-
-            // 👇 修正：疊加 1 級射速，且正確使用 attackSpeed 變數
-            this.skills.attackSpeed += 1;
-        } else if (this.charId === 'titan') {
+            this.skills.attackSpeed += 1; // 確保幻影的射速加成還在
+        } 
+        else if (this.charId === 'titan') {
+            // 泰坦 (Titan)：重裝坦克，移速慢、血量高、威力大、自帶護盾
             this.speedMod = 0.85;
             this.maxHP += 50;
             this.skills.shieldMax = Math.max(1, this.skills.shieldMax);
