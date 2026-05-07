@@ -43,6 +43,12 @@ class BootScene extends Phaser.Scene {
         this.add.text(500, 400, '星核突圍中...', { fontSize: '32px', color: '#00ffff' }).setOrigin(0.5);
 
         this.load.image('space_bg', 'https://labs.phaser.io/assets/skies/deep-space.jpg');
+        // 👇 新增這行：載入寫實版爪子子彈圖片
+        this.load.image('clawBullet', './assets/claw_bullet.png');
+        // 👇 新增這段：載入深淵蟲后專屬的普攻子彈
+        this.load.image('queenBaseBullet', './assets/queen_base_bullet.png');
+        // 👇 新增這行：載入深淵蟲后的腐蝕酸網子彈
+        this.load.image('acidNet', './assets/acid_net.png');
         // 載入多方向機甲貼圖
         const chars = ['alpha', 'phantom', 'titan'];
         chars.forEach(c => {
@@ -69,7 +75,6 @@ class BootScene extends Phaser.Scene {
         this.load.image('medkit', 'https://labs.phaser.io/assets/sprites/firstaid.png');
         this.load.image('item_nuke', 'https://labs.phaser.io/assets/sprites/orb-red.png');
         this.load.image('item_shield', 'https://labs.phaser.io/assets/sprites/orb-blue.png');
-        this.load.image('item_magnet', 'https://labs.phaser.io/assets/sprites/orb-yellow.png');
 
         // 載入本地美術圖
         this.load.image('menu_bg', './assets/main_menu_bg.png');
@@ -84,13 +89,20 @@ class BootScene extends Phaser.Scene {
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ffff).fillCircle(4, 4, 4).generateTexture('laserSpark', 8, 8);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0x00ffff, 0.9).fillCircle(12, 12, 12).generateTexture('shieldBall', 24, 24);
         this.make.graphics({ x: 0, y: 0, add: false }).fillStyle(0xff00ff).fillCircle(5, 5, 5).fillStyle(0xffffff).fillCircle(5, 5, 2).generateTexture('novaBullet', 10, 10);
+
+        // 👇 新增這段：用程式碼動態繪製「黃金磁力能量球」
+        const magnetGfx = this.make.graphics({ x: 0, y: 0, add: false });
+        magnetGfx.fillStyle(0xffaa00, 0.3).fillCircle(16, 16, 16); // 外層橘黃色光暈
+        magnetGfx.fillStyle(0xffff00, 0.8).fillCircle(16, 16, 10); // 中層高亮黃色
+        magnetGfx.fillStyle(0xffffff, 1.0).fillCircle(16, 16, 4);  // 內層純白核心
+        magnetGfx.generateTexture('item_magnet', 32, 32);
         // 載入史詩級 Boss 寶箱圖片
         this.load.image('superChest', './assets/super_chest.png');
         // 👇 替換為全新設計的【霓虹粉紫菱形水晶 (EXP Gem)】：
         const fragGfx = this.make.graphics({ x: 0, y: 0, add: false });
-        
+
         // 1. 外層：霓虹粉紫色的菱形光暈，極度顯眼
-        fragGfx.fillStyle(0xff00ff, 0.4); 
+        fragGfx.fillStyle(0xff00ff, 0.4);
         fragGfx.beginPath();
         fragGfx.moveTo(10, 0); fragGfx.lineTo(20, 10); fragGfx.lineTo(10, 20); fragGfx.lineTo(0, 10);
         fragGfx.closePath();
@@ -185,12 +197,12 @@ class MainMenuScene extends Phaser.Scene {
         const bestiaryBg = this.add.rectangle(500, 400, 1000, 800, 0, 0.95).setInteractive();
         this.bestiaryPanel.add([bestiaryBg, this.add.rectangle(500, 400, 800, 600, 0x111122).setStrokeStyle(4, 0x00ffaa)]);
         // 👇 加入 fontFamily 與 padding 防止剃頭
-        this.bestiaryPanel.add(this.add.text(500, 150, '星核檔案室 - 異種資料庫', { 
+        this.bestiaryPanel.add(this.add.text(500, 150, '星核檔案室 - 異種資料庫', {
             fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
-            fontSize: '42px', 
-            color: '#00ffaa', 
+            fontSize: '42px',
+            color: '#00ffaa',
             fontStyle: 'bold',
-            padding: { top: 10, bottom: 10 } 
+            padding: { top: 10, bottom: 10 }
         }).setOrigin(0.5));
 
         this.monsterList = this.add.container(300, 240);
@@ -266,9 +278,9 @@ class MainMenuScene extends Phaser.Scene {
 
         const closeBestiary = this.add.rectangle(500, 650, 200, 50, 0x333333).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleBestiary(false));
         // 👇 加入 fontFamily 與 padding 防止剃頭，順便加粗讓按鈕更好看
-        this.bestiaryPanel.add([closeBestiary, this.add.text(500, 650, '關閉圖鑑', { 
+        this.bestiaryPanel.add([closeBestiary, this.add.text(500, 650, '關閉圖鑑', {
             fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
-            fontSize: '24px', 
+            fontSize: '24px',
             color: '#ff0000',
             fontStyle: 'bold',
             padding: { top: 5, bottom: 5 }
@@ -680,6 +692,8 @@ class MainGameScene extends Phaser.Scene {
         this.toxicPuddles = [];
         this.frostAuraState = { active: false, x: 0, y: 0, gfx: null };
         this.pillarRects = [];
+        this.currentHazard = 'none';
+        this.hazardTimer = 0;
     }
 
     create() {
@@ -949,6 +963,19 @@ class MainGameScene extends Phaser.Scene {
         this.add.rectangle(500, 40, 1000, 80, 0x000000, 0.5).setScrollFactor(0).setDepth(5000);
         this.statsHud = this.add.text(20, 20, '', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '14px', color: '#00ffff', fontStyle: 'bold', lineSpacing: 2, padding: { top: 5, bottom: 5 } }).setScrollFactor(0).setDepth(5001);
         this.timerText = this.add.text(650, 40, '00:00', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '32px', color: '#ffffff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(5001);
+
+        // 在 timerText 附近新增災害警告 UI
+        this.hazardTxt = this.add.text(500, 80, '', {
+            fontFamily: '"Microsoft JhengHei", Arial, sans-serif',
+            fontSize: '24px',
+            color: '#ffaa00',
+            fontStyle: 'bold',
+            padding: { top: 5, bottom: 5 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(5001).setVisible(false);
+
+        // 用來做全螢幕環境變色的覆蓋層
+        this.hazardOverlay = this.add.rectangle(500, 400, 1000, 800, 0xff0000, 0).setScrollFactor(0).setDepth(3500);
+
         this.coinHud = this.add.text(980, 40, '', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '22px', color: '#ffff00', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(5001);
         this.add.rectangle(25, 100, 250, 25, 0x000000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5001).setStrokeStyle(2, 0xffffff, 1);
         this.hpBarFront = this.add.rectangle(25, 100, 250, 25, 0xff0000).setOrigin(0, 0.5).setScrollFactor(0).setDepth(5002);
@@ -964,18 +991,18 @@ class MainGameScene extends Phaser.Scene {
         this.bossHud.add([this.bossBarFront, this.bossNameUiTxt]);
 
         this.pauseOverlay = this.add.rectangle(500, 400, 1000, 800, 0, 0.8).setScrollFactor(0).setDepth(9500).setVisible(false).setInteractive();
-        
+
         // 👇 1. 新增「返回遊戲」按鈕 (放在畫面上方 Y: 420)
         this.resumeBtn = this.add.rectangle(500, 420, 320, 70, 0x333333).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(9501).setVisible(false).setStrokeStyle(2, 0x00ffff);
         this.resumeTxt = this.add.text(500, 420, '返回遊戲', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '28px', color: '#00ffff', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9502).setVisible(false);
-        
+
         // 綁定點擊事件：呼叫 togglePause 解除暫停
         this.resumeBtn.on('pointerdown', () => this.togglePause());
 
         // 👇 2. 調整原本的「返回主選單」按鈕 (往下移到 Y: 530，並改為紅色調防誤觸)
         this.quitBtn = this.add.rectangle(500, 530, 320, 70, 0x333333).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(9501).setVisible(false).setStrokeStyle(2, 0xff5555);
         this.quitTxt = this.add.text(500, 530, '返回主選單', { fontFamily: '"Microsoft JhengHei", Arial, sans-serif', fontSize: '28px', color: '#ff5555', fontStyle: 'bold', padding: { top: 5, bottom: 5 } }).setOrigin(0.5).setScrollFactor(0).setDepth(9502).setVisible(false);
-        
+
         this.quitBtn.on('pointerdown', () => {
             this.sound.stopAll();
             if (!this.isTestMode) {
@@ -1047,6 +1074,7 @@ class MainGameScene extends Phaser.Scene {
         this.renderLasers();
         this.handleEnemies(time, delta);
         this.handleEnvironment(time);
+        this.handleHazards(time); // 👇 加入這行讓災害系統運作
         this.handleGarbageCollection();
 
         this.itemGroup.getChildren().forEach(i => {
@@ -1119,6 +1147,12 @@ class MainGameScene extends Phaser.Scene {
             this.score += (addSecs * this.rewardMultiplier);
             this.survivalMS %= 1000;
             this.updateHUD();
+
+            // 👇 修改：加入 this.bossCount >= 2，確保玩家在前期不會遭遇環境災害
+            // (bossCount 在打第一隻王時是 1，打第二隻王時是 2，代表打完第二隻王後才會開始有災害)
+            if (this.survivalSeconds % 45 === 30 && !this.bossActive && this.currentHazard === 'none' && this.bossCount >= 2) {
+                this.triggerHazard();
+            }
 
             let minute = Math.floor(this.survivalSeconds / 60);
 
@@ -1226,7 +1260,10 @@ class MainGameScene extends Phaser.Scene {
 
                 let spd = 120;
                 if (a.texture.key === 'striker_ship') spd = 180;
-                if (a.isBoss) spd = 60;
+                // 👇 替換為動態移速：基礎 60，每擊殺一隻王增加 5，極限速度鎖定在 180 (避免快到無法閃避)
+                if (a.isBoss) {
+                    spd = Math.min(180, 60 + (this.bossCount * 5));
+                }
 
                 if (a.texture.key === 'hound_ship') {
                     if (!a.dashState) a.dashState = { t: 0, phase: 'slow' };
@@ -1346,12 +1383,38 @@ class MainGameScene extends Phaser.Scene {
         if (!this.boss || !this.boss.active) return;
 
         if (!this.bossSkillTimers['base']) this.bossSkillTimers['base'] = 0;
-        if (time - this.bossSkillTimers['base'] > 3000) {
+
+        // 👇 1. 動態冷卻時間：基礎 4500ms，每輪減少 300ms，最快極限 1500ms (後期會瘋狂普攻)
+        let currentBaseCd = Math.max(1500, 4500 - (this.bossCount * 300));
+
+        if (time - this.bossSkillTimers['base'] > currentBaseCd) {
             this.bossSkillTimers['base'] = time;
+
+            // 👇 2. 動態彈幕速度：基礎 160，每輪增加 15，最快極限 350 (後期子彈極具壓迫感)
+            let currentBulletSpd = Math.min(350, 160 + (this.bossCount * 15));
+
             for (let i = -1; i <= 1; i++) {
-                let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'novaBullet').setTint(0xff0000);
-                let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y) + (i * 0.2);
-                b.setVelocity(Math.cos(ang) * 250, Math.sin(ang) * 250);
+                // 👇 1. 判斷目前是不是深淵蟲后
+                let isQueen = this.boss.texture.key === 'boss_queen';
+                
+                // 根據 Boss 身分決定子彈外觀 (蟲后用新圖，其他 Boss 維持原本的圓球)
+                let bKey = isQueen ? 'queenBaseBullet' : 'novaBullet';
+                let b = this.bulletGroup.create(this.boss.x, this.boss.y, bKey);
+                
+                // 只有原本的圓球才需要染成紅色，新圖保留原本漂亮的綠紫漸層
+                if (!isQueen) b.setTint(0xff0000);
+                
+                // 如果是新子彈，稍微放大一點增加壓迫感
+                if (isQueen) b.setScale(1.2);
+
+                // 計算射擊角度
+                let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y) + (i * 0.25);
+                
+                // 👇 2. 【關鍵】讓子彈旋轉，使拖尾圖案的方向符合飛行軌跡！
+                b.setRotation(ang);
+
+                // 套用動態彈幕速度
+                b.setVelocity(Math.cos(ang) * currentBulletSpd, Math.sin(ang) * currentBulletSpd);
             }
         }
 
@@ -1510,17 +1573,41 @@ class MainGameScene extends Phaser.Scene {
                     cd = 5000;
                     if (time - this.bossSkillTimers[skill] > cd) {
                         this.bossSkillTimers[skill] = time;
+
+                        // 1. 【蓄力預警階段】
                         this.boss.isDashing = true;
+                        this.boss.setVelocity(0, 0);
                         this.boss.setTint(0xaa00ff);
-                        this.physics.moveToObject(this.boss, this.player, 1200);
-                        this.time.delayedCall(600, () => {
-                            if (this.boss) { this.boss.isDashing = false; this.boss.clearTint(); this.boss.setVelocity(0, 0); }
+
+                        // 👇 修復 1：先清除 Boss 身上的舊動畫，避免多重疊加
+                        this.tweens.killTweensOf(this.boss);
+
+                        // 👇 修復 2：改用絕對數值放大 (基礎 1.5 放大到 1.8)，不使用 +=
+                        this.tweens.add({ targets: this.boss, scale: 1.8, duration: 1500 });
+
+                        // 2. 【爆發衝撞階段】
+                        this.time.delayedCall(1500, () => {
+                            if (!this.boss || !this.boss.active) return;
+
+                            this.physics.moveToObject(this.boss, this.player, 1200);
+
+                            // 3. 【煞車恢復階段】
+                            this.time.delayedCall(600, () => {
+                                if (this.boss && this.boss.active) {
+                                    this.boss.isDashing = false;
+                                    this.boss.clearTint();
+                                    this.boss.setVelocity(0, 0);
+
+                                    // 👇 修復 3：在衝撞「結束」煞車時，強制把比例縮回 1.5
+                                    this.boss.setScale(1.5);
+                                }
+                            });
                         });
                     }
                     break;
 
                 case '孵化池裂解':
-                    cd = 7000;
+                    cd = 15000;
                     if (time - this.bossSkillTimers[skill] > cd) {
                         this.bossSkillTimers[skill] = time;
                         this.showBossWarning("孵化池裂解：大量幼蟲生成！");
@@ -1536,8 +1623,17 @@ class MainGameScene extends Phaser.Scene {
                     cd = 4500;
                     if (time - this.bossSkillTimers[skill] > cd) {
                         this.bossSkillTimers[skill] = time;
-                        let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'novaBullet').setTint(0x00ff00).setScale(2);
-                        this.physics.moveToObject(b, this.player, 400);
+                        // 👇 1. 改用全新的腐蝕酸網貼圖，並移除原本的綠色 Tint (保留原本漂亮的紫綠配色)
+                        let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'acidNet');
+                        b.setScale(1.5); // 放大一點，增加黏液撲面而來的壓迫感
+
+                        // 👇 2. 計算角度並設定旋轉，讓酸網的頭死死對準特工飛過去
+                        let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
+                        b.setRotation(ang);
+
+                        // 👇 3. 賦予之前下修過的速度 (220)，給玩家走位空間
+                        b.setVelocity(Math.cos(ang) * 220, Math.sin(ang) * 220);
+
                         // 命中後產生緩速區域
                         this.time.delayedCall(1000, () => {
                             if (!b.active) return;
@@ -1564,13 +1660,22 @@ class MainGameScene extends Phaser.Scene {
                     break;
 
                 case '骨刺彈幕':
-                    cd = 6000;
+                    cd = 4000;
                     if (time - this.bossSkillTimers[skill] > cd) {
                         this.bossSkillTimers[skill] = time;
-                        for (let i = 0; i < 12; i++) {
-                            let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'novaBullet').setTint(0xffeeaa);
-                            let ang = (i / 12) * Math.PI * 2;
-                            b.setVelocity(Math.cos(ang) * 350, Math.sin(ang) * 350);
+                        for (let i = -2; i <= 2; i++) {
+                            // 👇 【視覺強化版】：使用旋轉爪子
+                            let b = this.bulletGroup.create(this.boss.x, this.boss.y, 'clawBullet');
+
+                            // 加入高速旋轉效果，每秒旋轉大約兩圈 (360 * 2 = 720)
+                            b.setAngularVelocity(720);
+
+                            // 稍微放大一點點 (例如 1.3 ~ 1.5)，讓它更顯眼且具有壓迫感
+                            b.setScale(1.5);
+
+                            // 原本設定角度與速度的邏輯保留（使用之前削弱過的彈速 200）
+                            let ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y) + (i * 0.25);
+                            b.setVelocity(Math.cos(ang) * 200, Math.sin(ang) * 200);
                         }
                     }
                     break;
@@ -1708,7 +1813,8 @@ class MainGameScene extends Phaser.Scene {
             if (cycle === 0) {
                 // Boss 1：深淵蟲后
                 this.boss.setScale(1.5);
-                this.boss.hp = 600 + this.bossCount * 250;
+                this.boss.hp = 400 + this.bossCount * 200;
+
                 this.bossSkills = ['腐蝕酸網'];
                 this.bossSkillPool = ['虛空狂奔', '孵化池裂解', '骨刺彈幕'];
                 if (!this.isTestMode && !this.bestiary.monsters.includes('queen')) { this.bestiary.monsters.push('queen'); saveBestiary(this.bestiary); }
@@ -1796,17 +1902,32 @@ class MainGameScene extends Phaser.Scene {
 
         let targets = [...this.alienGroup.getChildren(), ...this.ghostGroup.getChildren()];
         let currentRange = 350 + (this.skills.range * 30);
-        let closest = null, minD = currentRange;
+        let closest = null;
+        let minSortD = 999999; // 用一個極大的初始值來比較優先級
+
         for (let t of targets) {
             if (!t.active) continue;
+
+            // 計算實際物理距離
             let d = Phaser.Math.Distance.Between(this.player.x, this.player.y, t.x, t.y);
-            if (d < minD) {
+
+            // 必須在機甲的射程內才納入判定
+            if (d <= currentRange) {
                 let blocked = false;
                 if (!this.isOverclocked) {
                     let line = new Phaser.Geom.Line(this.player.x, this.player.y, t.x, t.y);
                     for (let r of this.pillarRects) { if (Phaser.Geom.Intersects.LineToRectangle(line, r)) { blocked = true; break; } }
                 }
-                if (!blocked || t.texture.key === 'ghost') { minD = d; closest = t; }
+
+                if (!blocked || t.texture.key === 'ghost') {
+                    // 👇 【火控升級核心】：如果是 Boss，將它的「排序距離」減去 10000，強制讓它成為第一優先目標
+                    let sortD = t.isBoss ? (d - 10000) : d;
+
+                    if (sortD < minSortD) {
+                        minSortD = sortD;
+                        closest = t;
+                    }
+                }
             }
         }
         if (closest) {
@@ -2429,18 +2550,108 @@ class MainGameScene extends Phaser.Scene {
         }
     }
 
-    togglePause() { 
-        this.isPaused = !this.isPaused; 
-        const v = this.isPaused; 
-        this.isPaused ? this.physics.pause() : this.physics.resume(); 
-        
-        this.pauseOverlay.setVisible(v); 
-        this.quitBtn.setVisible(v); 
-        this.quitTxt.setVisible(v); 
-        
+    togglePause() {
+        this.isPaused = !this.isPaused;
+        const v = this.isPaused;
+        this.isPaused ? this.physics.pause() : this.physics.resume();
+
+        this.pauseOverlay.setVisible(v);
+        this.quitBtn.setVisible(v);
+        this.quitTxt.setVisible(v);
+
         // 👇 追加控制這兩個新元素的顯示狀態
         this.resumeBtn.setVisible(v);
         this.resumeTxt.setVisible(v);
+    }
+
+    triggerHazard() {
+        const hazards = [
+            { id: 'solar', name: '【警告：遭遇恆星風暴 (高溫輻射)】', color: '#ff5500', overlay: 0xff0000 },
+            { id: 'meteor', name: '【警告：進入碎石帶 (隕石雨)】', color: '#aaaaaa', overlay: 0x000000 },
+            { id: 'ion', name: '【警告：離子風暴 (牽引失效/緩速)】', color: '#aa00ff', overlay: 0x5500ff }
+        ];
+        let h = Phaser.Utils.Array.GetRandom(hazards);
+        this.currentHazard = h.id;
+
+        // 顯示 UI 與環境光
+        this.hazardTxt.setText(h.name).setColor(h.color).setVisible(true);
+        this.tweens.add({ targets: this.hazardTxt, alpha: { from: 1, to: 0.3 }, duration: 500, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: this.hazardOverlay, fillAlpha: 0.15, fillColor: h.overlay, duration: 1000 });
+        try { this.sound.play('sfx_alert', { volume: 0.5 }); } catch (e) { }
+
+        // 如果是離子風暴，暫時關閉磁力並減速
+        if (h.id === 'ion') {
+            this.tempMagnet = this.magnetRange;
+            this.magnetRange = 0; // 磁力歸零
+            this.speedMod *= 0.6; // 減速 40%
+        }
+
+        // 災害持續 15 秒後解除
+        this.time.delayedCall(15000, () => {
+            this.currentHazard = 'none';
+            this.hazardTxt.setVisible(false);
+            this.tweens.killTweensOf(this.hazardTxt);
+            this.tweens.add({ targets: this.hazardOverlay, fillAlpha: 0, duration: 1000 });
+
+            // 恢復離子風暴的扣除屬性
+            if (h.id === 'ion') {
+                this.magnetRange = this.tempMagnet;
+                this.speedMod /= 0.6;
+            }
+        });
+    }
+
+    handleHazards(time) {
+        if (this.currentHazard === 'none' || this.isPaused || this.isGameOver) return;
+
+        // 1. 恆星風暴：無視護盾的持續微量傷害 (已削弱並修復多重觸發 Bug)
+        if (this.currentHazard === 'solar') {
+            // 初始化專屬的扣血計時器
+            if (!this.lastSolarDmgTime) this.lastSolarDmgTime = 0;
+
+            // 每 1.5 秒才扣除 1 點裝甲值
+            if (time - this.lastSolarDmgTime > 1500) {
+                this.lastSolarDmgTime = time;
+                this.currentHP -= 1; // 傷害下修到 1
+
+                // 讓機甲稍微閃爍紅光，提示受到環境傷害，但不觸發無敵幀
+                this.player.setTint(0xff5500);
+                this.time.delayedCall(150, () => {
+                    if (this.player && this.player.active) this.player.clearTint();
+                });
+
+                this.updateHUD();
+                if (this.currentHP <= 0) this.handleGameOver();
+            }
+        }
+
+        // 2. 隕石雨：畫面邊緣隨機生成高速飛越的隕石 (大幅削弱密度與速度)
+        if (this.currentHazard === 'meteor') {
+            // 初始化專屬的隕石生成計時器
+            if (!this.lastMeteorTime) this.lastMeteorTime = 0;
+
+            // 👇 修正：每 800 毫秒才允許生成一顆隕石 (原本是每秒快 5 顆)
+            if (time - this.lastMeteorTime > 800) {
+                this.lastMeteorTime = time;
+
+                let startX, startY;
+                let edge = Phaser.Math.Between(0, 3); // 0上 1下 2左 3右
+                if (edge === 0) { startX = Phaser.Math.Between(0, WORLD_SIZE); startY = this.cameras.main.scrollY - 100; }
+                else if (edge === 1) { startX = Phaser.Math.Between(0, WORLD_SIZE); startY = this.cameras.main.scrollY + 900; }
+                else if (edge === 2) { startX = this.cameras.main.scrollX - 100; startY = Phaser.Math.Between(0, WORLD_SIZE); }
+                else { startX = this.cameras.main.scrollX + 1100; startY = Phaser.Math.Between(0, WORLD_SIZE); }
+
+                // 隨機朝著特工附近飛去
+                let angle = Phaser.Math.Angle.Between(startX, startY, this.player.x + Phaser.Math.Between(-200, 200), this.player.y + Phaser.Math.Between(-200, 200));
+
+                // 👇 修正：稍微縮小隕石體積 (0.6 ~ 1.2), 讓特工有空隙閃避
+                let m = this.bulletGroup.create(startX, startY, 'asteroid1').setScale(Phaser.Math.FloatBetween(0.6, 1.2));
+                m.setTint(0xff5555); // 燒紅的隕石
+                // 👇 修正：速度從 450 大幅下修到 280，給予反應與走位時間
+                m.setVelocity(Math.cos(angle) * 280, Math.sin(angle) * 280);
+                m.setAngularVelocity(Phaser.Math.Between(-150, 150));
+            }
+        }
     }
 }
 
